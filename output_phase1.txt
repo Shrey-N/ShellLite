@@ -1,0 +1,13 @@
+﻿Testing Logic...
+AND works
+OR works
+NOT works
+
+Testing While...
+3
+2
+1
+
+Testing Try/Catch...
+Trying...
+Caught error: division by zero

@@ -1,0 +1,31 @@
+structure Animal
+    has name
+    to speak
+        say name + " makes a sound."
+
+structure Dog(Animal)
+    to speak
+        say name + " barks!"
+
+structure Cat(Animal)
+    to meow
+        say "Meow"
+
+d is Dog "Buddy"
+d.speak
+
+c is Cat "Whiskers"
+c.speak
+
+say "List Test:"
+l = [1, 2]
+append l 3
+say l
+v = pop l
+say "Popped: " + v
+say l
+
+say "String Test:"
+s = "Hello World"
+parts = split s " "
+say parts

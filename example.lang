@@ -1,0 +1,11 @@
+print "--- Start of Script ---"
+
+val = 10
+if val == 10
+    print "Value is 10"
+
+print "Looping:"
+for 3 in range
+    print "Iteration"
+
+print "--- End of Script ---"

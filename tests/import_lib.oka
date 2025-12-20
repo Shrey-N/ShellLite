@@ -1,0 +1,7 @@
+to greet name
+    say "Hello " + name
+
+model Dog
+    has name
+    to bark
+        say name + " says Woof!"

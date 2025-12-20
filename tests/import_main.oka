@@ -1,0 +1,6 @@
+use "tests/import_lib.oka"
+
+greet "World"
+
+my_dog is Dog "Buddy"
+my_dog.bark

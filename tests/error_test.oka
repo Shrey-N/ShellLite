@@ -1,0 +1,9 @@
+say "Starting Error Test"
+# 1. Name Error
+say undefined_var
+
+# 2. Type Error (comment out above to test next)
+# say 10 + "string"
+
+# 3. Syntax Error (this will fail at parse time, so handled differently)
+# if x say "what?"

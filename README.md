@@ -1,5 +1,6 @@
 # ShellLite: The Comprehensive Guide
 By Shrey Naithani
+
 Welcome to the official documentation for **ShellLite**, the programming language designed to be as readable as plain English,
 
 ## Table of Contents

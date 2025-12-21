@@ -1,6 +1,6 @@
 # ShellLite: The Comprehensive Guide
-
-Welcome to the official documentation for **ShellLite**, the programming language designed to be as readable as plain English.
+By Shrey Naithani
+Welcome to the official documentation for **ShellLite**, the programming language designed to be as readable as plain English,
 
 ## Table of Contents
 1. [Introduction](#introduction)
@@ -485,4 +485,4 @@ to check_age age
 
 ---
 
-*Documentation maintained by Shrey Naithani.*
+*Project Developed and maintained by Shrey Naithani.*

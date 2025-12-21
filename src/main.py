@@ -31,7 +31,7 @@ def run_file(filename: str):
 def run_repl():
     interpreter = Interpreter()
     print("Welcome to ShellLite REPL!")
-    print("ShellLite v0.02.2 (Created by Shrey Naithani)")
+    print("ShellLite v0.03.1 (Created by Shrey Naithani)")
     print("Type 'exit' to quit.")
     
     buffer = []

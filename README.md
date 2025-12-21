@@ -494,7 +494,7 @@ to check_age age
 
 ## Natural Syntax (v0.02.1)
 
-# ShellLite (v0.02.2)
+ShellLite v0.02.1 introduces "Natural Language" features to make code read like English.
 
 ### Natural Comparisons
 Use phrases instead of symbols.
@@ -672,7 +672,7 @@ listen on port 8080
 
 ---
 
-## Desktop Automation (v0.04)
+## Desktop Automation (v0.03.1)
 
 ShellLite now supports powerful desktop automation and data handling.
 

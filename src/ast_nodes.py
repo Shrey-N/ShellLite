@@ -97,6 +97,7 @@ class FunctionDef(Node):
 class Call(Node):
     name: str
     args: List[Node]
+    body: Optional[List[Node]] = None # For WebDSL (e.g. div ... \n ...block)
 
 @dataclass
 class Return(Node):
@@ -315,6 +316,14 @@ class After(Node):
     body: List[Node]
 
 @dataclass
+
+class ServeStatic(Node):
+    def __init__(self, folder: Node, url: Node):
+        self.folder = folder
+        self.url = url
+    def __repr__(self):
+        return f"ServeStatic({self.folder}, {self.url})"
+
 class Download(Node):
     url: Node
     

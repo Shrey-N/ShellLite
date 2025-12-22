@@ -1,9 +1,14 @@
-
 import sys
 import os
 
-# Ensure the current directory is in path so we can import src
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+if getattr(sys, 'frozen', False):
+    # PyInstaller bundle path
+    base_dir = sys._MEIPASS
+else:
+    # Standard Python path
+    base_dir = os.path.dirname(os.path.abspath(__file__))
+
+sys.path.insert(0, base_dir)
 
 from src.main import main
 

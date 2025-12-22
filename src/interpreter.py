@@ -116,13 +116,72 @@ class Instance:
         self.class_def = class_def
         self.data: Dict[str, Any] = {}
 
+class Tag:
+    """HTML Tag Builder"""
+    def __init__(self, name: str, attrs: Dict[str, Any] = None):
+        self.name = name
+        self.attrs = attrs or {}
+        self.children: List[Any] = []
+        
+    def add(self, child):
+        # Prevent double-addition (once by push, once by return value capture)
+        # Equality check might be expensive if deep, use identity for objects?
+        # But 'child' can be string.
+        # String duplicates are allowed.
+        # Tag duplicates (identity) are not.
+        if isinstance(child, Tag):
+             if any(c is child for c in self.children):
+                 return
+        self.children.append(child)
+        
+    def __str__(self):
+        # Render attributes
+        attr_str = ""
+        for k, v in self.attrs.items():
+            attr_str += f' {k}="{v}"'
+            
+        # Render children
+        inner = ""
+        for child in self.children:
+            inner += str(child)
+            
+        # Void tags?
+        if self.name in ('img', 'br', 'hr', 'input', 'meta', 'link'):
+            return f"<{self.name}{attr_str} />"
+            
+        return f"<{self.name}{attr_str}>{inner}</{self.name}>"
+
+class WebBuilder:
+    """Context manager for nested tags"""
+    def __init__(self, interpreter):
+        self.stack: List[Tag] = []
+        self.interpreter = interpreter
+        
+    def push(self, tag: Tag):
+        if self.stack:
+            self.stack[-1].add(tag)
+        self.stack.append(tag)
+        
+    def pop(self):
+        if not self.stack: return None
+        return self.stack.pop()
+        
+    def add_text(self, text: str):
+        if self.stack:
+            self.stack[-1].add(text)
+        else:
+            # If no root tag, maybe we just print? No, assume returning string
+            pass
+
 class Interpreter:
     def __init__(self):
         self.global_env = Environment()
         self.current_env = self.global_env
         self.functions: Dict[str, FunctionDef] = {}
         self.classes: Dict[str, ClassDef] = {}
-        self.http_routes: Dict[str, List[Node]] = {} # path -> body
+        self.http_routes = {} # path -> body
+        self.static_routes = {} # url_prefix -> folder_path
+        self.web = WebBuilder(self)
 
         
         # Built-in functions
@@ -154,6 +213,9 @@ class Interpreter:
             'char': chr, 'ord': ord,
             
             'append': lambda l, x: (l.append(x), l)[1],
+            'push': self._builtin_push,
+            'count': len,  # Natural alias: count of tasks
+            'remove': lambda l, x: l.remove(x),
             'pop': lambda l, idx=-1: l.pop(idx),
             'get': lambda l, idx: l[idx],
             'set': lambda l, idx, val: l.__setitem__(idx, val) or l,
@@ -191,11 +253,71 @@ class Interpreter:
             'items': lambda d: list(d.items()),
             'wait': time.sleep,
             'wait': time.sleep,
+            'push': self._builtin_push,
+            'remove': lambda lst, item: lst.remove(item),
             'Set': set, # Feature 6: Sets
+            'show': print,
+            'say': print,
         }
+        
+        # Add basic HTML tags
+        # Web DSL Tags
+        tags = [
+            'div', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 
+            'span', 'a', 'img', 'button', 'input', 'form', 
+            'ul', 'li', 'ol', 'table', 'tr', 'td', 'th',
+            'html', 'head', 'body', 'title', 'meta', 'link',
+            'script', 'style', 'br', 'hr',
+            'header', 'footer', 'section', 'article', 'nav', 'aside', 'main',
+            'label', 'textarea', 'select', 'option', 'fieldset', 'legend',
+            'strong', 'em', 'code', 'pre', 'blockquote', 'iframe', 'canvas', 'svg'
+        ]
+        for t in tags:
+            self.builtins[t] = self._make_tag_fn(t)
 
         
         self._init_std_modules()
+
+    def _make_tag_fn(self, tag_name):
+        # Returns a callable that creates a Tag
+        def tag_fn(*args):
+            # Parse args: 
+            # 1. Strings are text content (optional, mostly for single line)
+            # 2. Assign/PropAssign? No, standard args here.
+            # ShellLite doesn't have keyword args in Call node generically yet for builtins.
+            # But we often pass "class='foo'". This comes as a String "class=foo" if user types it?
+            # Or dictionary?
+            # Convention: 
+            #  - Strings with '=' are attributes
+            #  - Strings without '=' are text content
+            #  - Dicts are attributes
+            
+            attrs = {}
+            content = []
+            
+            for arg in args:
+                if isinstance(arg, dict):
+                    attrs.update(arg)
+                elif isinstance(arg, str):
+                    if '=' in arg and not ' ' in arg and arg.split('=')[0].isalnum():
+                        # Simple attribute parsing: id=main
+                        k, v = arg.split('=', 1)
+                        attrs[k] = v
+                    else:
+                        content.append(arg)
+                else:
+                    content.append(str(arg))
+            
+            t = Tag(tag_name, attrs)
+            for c in content:
+                t.add(c)
+                
+            # If we are in a web stack, this is already added by push?
+            # But wait, visit_Call will handle the BLOCK by passing context.
+            # This function just creates the Node. 
+            # The 'block' handling must be in visit_Call.
+            return t
+        return tag_fn
 
     def _builtin_map(self, lst, func):
         """Map function over list"""
@@ -216,6 +338,10 @@ class Interpreter:
                 return functools.reduce(func, lst, initial)
             return functools.reduce(func, lst)
         raise TypeError("reduce requires a callable")
+
+    def _builtin_push(self, lst, item):
+        lst.append(item)
+        return None
 
     def _init_std_modules(self):
         self.std_modules = {
@@ -536,9 +662,30 @@ class Interpreter:
     def visit_Call(self, node: Call):
         # Check built-ins first
         if node.name in self.builtins:
-             # Basic support for built-in calls (assuming 1 arg usually)
              args = [self.visit(a) for a in node.args]
-             return self.builtins[node.name](*args)
+             result = self.builtins[node.name](*args)
+             
+             # If this is a Tag and we have a block body
+             if isinstance(result, Tag):
+                 if node.body:
+                     self.web.push(result)
+                     try:
+                         for stmt in node.body:
+                             res = self.visit(stmt)
+                             # If stmt expression returns a string/Tag, add it?
+                             # In ShellLite, statements don't naturally return unless expression stmt.
+                             # visit(Expression) returns value.
+                             # We should auto-add expression results to current tag?
+                             if res is not None and (isinstance(res, str) or isinstance(res, Tag)):
+                                 self.web.add_text(res)
+                     finally:
+                         self.web.pop()
+                 # If it's a top-level tag in a route, we probably want to return it?
+                 # But 'result' is the tag itself.
+                 # If we pushed it, we populated it.
+                 return result
+             
+             return result
 
         # Check for lambda/callable in environment
         # Check for lambda/callable/object in environment
@@ -625,10 +772,32 @@ class Interpreter:
             
         self.current_env = new_env
         
+        self.current_env = new_env
+        
         ret_val = None
+        
+        # Check if FunctionDef has a body, but Call has a body (Block)
+        # Passed as a special variable? or implicitly?
+        # User defined component:
+        # to MyComp:
+        #    div class="comp"
+        #       yield # or render children?
+        
         try:
             for stmt in func_def.body:
-                self.visit(stmt)
+                # If stmt is 'yield' or similar, we render node.body?
+                # For now, just run body. 
+                # If node.body exists (from call), we might want to evaluate it 
+                # and pass it as 'children' arg if defined?
+                val = self.visit(stmt)
+                # Feature: Implicit Return
+                # If the statement produced a value (expression, tag), track it.
+                # If it didn't (assignment, if, etc), it returns None.
+                # We update ret_val to the last result.
+                ret_val = val
+                
+            # If function didn't return, maybe it built a structure?
+            # But functions return explicitly usually. 
         except ReturnException as e:
             ret_val = e.value
         finally:
@@ -1287,6 +1456,19 @@ class Interpreter:
             if total > 0:
                 print(f"Progress: [{'='*20}] 100%")
 
+    def visit_ServeStatic(self, node: ServeStatic):
+        folder = str(self.visit(node.folder))
+        url_prefix = str(self.visit(node.url))
+        
+        # Ensure url prefix starts with / 
+        if not url_prefix.startswith('/'): url_prefix = '/' + url_prefix
+        
+        if not os.path.isdir(folder):
+            print(f"Warning: Static folder '{folder}' does not exist.")
+            
+        self.static_routes[url_prefix] = folder
+        print(f"Serving static files from '{folder}' at '{url_prefix}'")
+
     def visit_Every(self, node: Every):
         interval = self.visit(node.interval)
         if node.unit == 'minutes':
@@ -1326,35 +1508,84 @@ class Interpreter:
         interpreter_instance = self
         
         class Handler(BaseHTTPRequestHandler):
+            def do_POST(self):
+                # Parse POST data
+                content_length = int(self.headers.get('Content-Length', 0))
+                post_data = self.rfile.read(content_length).decode('utf-8')
+                
+                # Parse params (x-www-form-urlencoded)
+                parsed_params = urllib.parse.parse_qs(post_data)
+                # Convert to simple dict (single values)
+                params = {k: v[0] for k, v in parsed_params.items()}
+                
+                self.handle_request(params)
+                
             def do_GET(self):
+                self.handle_request({})
+
+            def handle_request(self, extra_env_vars):
                 # Check routes
                 path = self.path
+                
+                # Match dynamic routes?
+                # Simple exact match for now, or regex if key is pattern
+                handler_body = None
+                params = extra_env_vars.copy()
+                
+                # Try exact match
                 if path in interpreter_instance.http_routes:
-                    body = interpreter_instance.http_routes[path]
-                    
-                    # Capture output or return value?
-                    # ShellLite style: implicit return last value or 'give'?
-                    # Or 'say' to stdout?
-                    # For a web server, we typically want to send response.
-                    # Let's assume the body sets a variable 'response' or returns a string.
-                    
+                    handler_body = interpreter_instance.http_routes[path]
+                else:
+                    # Check for pattern match: /user/:id
+                    for route_path, body in interpreter_instance.http_routes.items():
+                         if ':' in route_path:
+                             # rudimentary mapping
+                             route_parts = route_path.split('/')
+                             path_parts = path.split('/')
+                             if len(route_parts) == len(path_parts):
+                                 match = True
+                                 temp_params = {}
+                                 for r, p in zip(route_parts, path_parts):
+                                     if r.startswith(':'):
+                                         temp_params[r[1:]] = p
+                                     elif r != p:
+                                         match = False; break
+                                 if match:
+                                     handler_body = body
+                                     params = temp_params
+                                     break
+                
+                if handler_body:
                     try:
-                         # Create specific env
-                         response_env = Environment(parent=interpreter_instance.global_env)
-                         # Inject request info?
-                         interpreter_instance.current_env = response_env
+                         # Use global env directly for state persistence
+                         # Inject params into global env (temporarily)
+                         for k, v in params.items():
+                             interpreter_instance.global_env.set(k, v)
+                             
+                         interpreter_instance.current_env = interpreter_instance.global_env
+                         
+                         # Execute body
+                         # If body contains Tag statements, they return Tags.
+                         # We need to capture the "last expression" or a return value.
                          
                          result = None
-                         for stmt in body:
+                         for stmt in handler_body:
                              result = interpreter_instance.visit(stmt)
                              
-                         # If result is string, send it
-                         if result:
+                         # If result is Tag, str(result)
+                         if isinstance(result, Tag):
                              self.send_response(200)
+                             self.send_header('Content-Type', 'text/html')
+                             self.end_headers()
+                             self.wfile.write(str(result).encode())
+                         elif result:
+                             self.send_response(200)
+                             self.send_header('Content-Type', 'text/html')
                              self.end_headers()
                              self.wfile.write(str(result).encode())
                          else:
-                             # Default
+                             # maybe they used 'give' which raises ReturnException?
+                             # Handled below
                              self.send_response(200)
                              self.end_headers()
                              self.wfile.write(b"OK")
@@ -1373,9 +1604,48 @@ class Interpreter:
                     # So global state switch is safe strictly speaking if single threaded.
                     
                 else:
-                    self.send_response(404)
-                    self.end_headers()
-                    self.wfile.write(b"Not Found")
+                    # 3. Check Static Files
+                    served = False
+                    path = self.path
+                    if '?' in path: path = path.split('?')[0]
+                    
+                    for route_prefix, folder_path in interpreter_instance.static_routes.items():
+                         if path.startswith(route_prefix):
+                             # Calculate file path
+                             # route_prefix: /static  folder: ./public
+                             # path: /static/css/style.css
+                             # relative: css/style.css
+                             relative = path[len(route_prefix):]
+                             if relative.startswith('/'): relative = relative[1:]
+                             
+                             file_path = os.path.join(folder_path, relative)
+                             if os.path.exists(file_path) and os.path.isfile(file_path):
+                                 # Serve it
+                                 try:
+                                     with open(file_path, 'rb') as f:
+                                         content = f.read()
+                                     
+                                     # Guess mime type
+                                     ctype = 'application/octet-stream'
+                                     if file_path.endswith('.html'): ctype = 'text/html'
+                                     elif file_path.endswith('.css'): ctype = 'text/css'
+                                     elif file_path.endswith('.js'): ctype = 'application/javascript'
+                                     elif file_path.endswith('.png'): ctype = 'image/png'
+                                     elif file_path.endswith('.jpg'): ctype = 'image/jpeg'
+                                     
+                                     self.send_response(200)
+                                     self.send_header('Content-Type', ctype)
+                                     self.end_headers()
+                                     self.wfile.write(content)
+                                     served = True
+                                     break
+                                 except:
+                                     pass
+                    
+                    if not served:
+                        self.send_response(404)
+                        self.end_headers()
+                        self.wfile.write(b"Not Found")
                     
             def log_message(self, format, *args):
                 pass # Sshh

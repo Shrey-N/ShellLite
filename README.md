@@ -87,13 +87,16 @@ say "Hello, World!"
 
 Run a script:
 ```bash
-sh your_script.shl
+shl your_script.shl
 ```
 
 Start the REPL:
 ```bash
-sh
+shl
 ```
+
+### Global Installation
+Simply run the `shl.exe` file. If it's not installed, it will offer to set up the global `shl` command for you automatically. Use `shl help` to verify.
 
 ---
 
@@ -716,6 +719,69 @@ type "Hello World"
 press "enter"
 click at 100, 200
 notify "Task Done" "Script finished successfully."
+```
+
+---
+
+## English-Like Web DSL (v0.03.2)
+
+ShellLite v0.03.2 focuses on making web development and list management as readable as a conversation.
+
+### Natural Routing
+Define routes using readable English sentences.
+
+```javascript
+# Static file serving
+serve files from "public"
+
+# Route handlers
+when someone visits "/"
+    App  # Calls a component
+
+when someone submits to "/add"
+    add text to tasks
+    App
+```
+
+### Page Components
+Define UI components using `define page` or `define component`.
+
+```javascript
+define page Header
+    heading "Welcome to my App"
+    paragraph "The simplest web framework ever."
+
+define page TaskList using items
+    ul
+        for each item in items
+            li item
+```
+
+### English Collection Initialization
+Initialize lists and dictionaries with natural phrasing.
+
+```javascript
+tasks is a list
+user is a dictionary
+settings is a map
+```
+
+### List Operations
+Manipulate lists without technical syntax.
+
+```javascript
+add "item" to tasks
+put 5 into scores
+
+count of tasks  # Equivalent to len(tasks)
+how many tasks  # Equivalent to len(tasks)
+```
+
+### Smart Server Startup
+Start your server with a single sentence.
+
+```javascript
+start server on port 8080
 ```
 
 ---

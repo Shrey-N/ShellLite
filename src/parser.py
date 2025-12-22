@@ -86,6 +86,15 @@ class Parser:
             return self.parse_execute()
         elif self.check('MAKE'):
             return self.parse_make()
+        elif self.check('INPUT'):
+            # Check if this is 'input type="..."' i.e. HTML tag
+            next_t = self.peek(1)
+            if next_t.type in ('ID', 'TYPE', 'STRING', 'NAME', 'VALUE', 'CLASS', 'STYLE', 'ONCLICK', 'SRC', 'HREF', 'ACTION', 'METHOD'):
+                # Treat as HTML tag function call - use parse_id_start_statement with token passed
+                input_token = self.consume()
+                return self.parse_id_start_statement(passed_name_token=input_token)
+            # Else fallthrough to expression
+            return self.parse_expression_stmt()
         elif self.check('ID'):
             return self.parse_id_start_statement()
         elif self.check('SPAWN'):
@@ -113,6 +122,8 @@ class Parser:
              return self.parse_after()
         elif self.check('LISTEN'):
             return self.parse_listen()
+        elif self.check('SERVE'):
+            return self.parse_serve()
         elif self.check('DOWNLOAD'):
              return self.parse_download()
         elif self.check('COMPRESS') or self.check('EXTRACT'):
@@ -128,6 +139,17 @@ class Parser:
              return self.parse_clipboard()
         elif self.check('PRESS') or self.check('TYPE') or self.check('CLICK') or self.check('NOTIFY'):
              return self.parse_automation()
+        # === NATURAL ENGLISH WEB DSL ===
+        elif self.check('DEFINE'):
+            return self.parse_define_page()
+        elif self.check('ADD'):
+            return self.parse_add_to()
+        elif self.check('START'):
+            return self.parse_start_server()
+        elif self.check('HEADING'):
+            return self.parse_heading()
+        elif self.check('PARAGRAPH'):
+            return self.parse_paragraph()
         else:
             return self.parse_expression_stmt()
 
@@ -408,8 +430,43 @@ class Parser:
         return node
 
     def parse_when(self) -> Node:
-        """Parse: when value is x => (body) ... OR when condition (body)"""
+        """Parse: when value is x => (body) ... OR when condition (body) OR when someone visits/submits"""
         token = self.consume('WHEN')
+        
+        # Check for natural routing: when someone visits/submits "path"
+        if self.check('SOMEONE'):
+            self.consume('SOMEONE')
+            if self.check('VISITS'):
+                self.consume('VISITS')
+                path = String(self.consume('STRING').value)
+                self.consume('NEWLINE')
+                self.consume('INDENT')
+                body = []
+                while not self.check('DEDENT') and not self.check('EOF'):
+                    while self.check('NEWLINE'): self.consume()
+                    if self.check('DEDENT'): break
+                    body.append(self.parse_statement())
+                self.consume('DEDENT')
+                node = OnRequest(path, body)
+                node.line = token.line
+                return node
+            elif self.check('SUBMITS'):
+                self.consume('SUBMITS')
+                if self.check('TO'):
+                    self.consume('TO')
+                path = String(self.consume('STRING').value)
+                self.consume('NEWLINE')
+                self.consume('INDENT')
+                body = []
+                while not self.check('DEDENT') and not self.check('EOF'):
+                    while self.check('NEWLINE'): self.consume()
+                    if self.check('DEDENT'): break
+                    body.append(self.parse_statement())
+                self.consume('DEDENT')
+                node = OnRequest(path, body)
+                node.line = token.line
+                return node
+        
         condition_or_value = self.parse_expression()
         self.consume('NEWLINE')
         self.consume('INDENT')
@@ -502,21 +559,30 @@ class Parser:
         while self.check('ID'):
             arg_name = self.consume('ID').value
             type_hint = None
+            
+            # Check for Type Hint or Trailing Colon
             if self.check('COLON'):
-                self.consume('COLON')
-                if self.check('ID'):
-                    type_hint = self.consume('ID').value
-                elif self.check('STRING'): # handle 'string' type
-                    type_hint = "str"
-                    self.consume()
-                else: 
-                     type_hint = self.consume().value # Fallback
+                # If next is newline, it's a trailing colon (end of def)
+                if self.peek(1).type == 'NEWLINE':
+                    pass 
+                else:
+                    self.consume('COLON')
+                    if self.check('ID'):
+                        type_hint = self.consume('ID').value
+                    elif self.check('STRING'): 
+                        type_hint = "str"
+                        self.consume()
+                    else: 
+                         type_hint = self.consume().value 
             
             default_val = None
             if self.check('ASSIGN'):
                 self.consume('ASSIGN')
                 default_val = self.parse_expression()
             args.append((arg_name, default_val, type_hint))
+            
+        if self.check('COLON'):
+            self.consume('COLON')
             
         self.consume('NEWLINE')
         self.consume('INDENT')
@@ -566,7 +632,7 @@ class Parser:
         node.line = start_token.line
         return node
     
-    def parse_id_start_statement(self) -> Node:
+    def parse_id_start_statement(self, passed_name_token=None) -> Node:
         """
         Handles statements starting with ID.
         1. Assignment: name = expr
@@ -575,7 +641,10 @@ class Parser:
         4. Method Call: name.method
         5. Property Access (Expression stmt): name.prop
         """
-        name_token = self.consume('ID')
+        if passed_name_token:
+            name_token = passed_name_token
+        else:
+            name_token = self.consume('ID')
         name = name_token.value
         
         if self.check('ASSIGN'):
@@ -620,8 +689,27 @@ class Parser:
             return node
         
         elif self.check('IS'):
-            # Instantiation: my_dog is Dog "Buddy"
-            self.consume('IS')
+            token_is = self.consume('IS')
+            
+            # Natural English initialization: tasks is a list
+            if self.check('ID') and self.peek().value == 'a':
+                self.consume()
+                
+            if self.check('LIST'):
+                self.consume('LIST')
+                self.consume('NEWLINE')
+                node = Assign(name, ListVal([]))
+                node.line = token_is.line
+                return node
+                
+            if self.check('ID') and self.peek().value in ('dictionary', 'map', 'dict'):
+                self.consume()
+                self.consume('NEWLINE')
+                node = Assign(name, Dictionary([]))
+                node.line = token_is.line
+                return node
+            
+            # Fallback to Instantiation: my_dog is Dog "Buddy"
             class_name = self.consume('ID').value
             args = []
             while not self.check('NEWLINE') and not self.check('EOF'):
@@ -629,7 +717,7 @@ class Parser:
             
             self.consume('NEWLINE')
             node = Instantiation(name, class_name, args)
-            node.line = name_token.line
+            node.line = token_is.line
             return node
             
         elif self.check('DOT'):
@@ -656,16 +744,82 @@ class Parser:
             if not self.check('NEWLINE') and not self.check('EOF') and not self.check('EQ') and not self.check('IS'):
                 args = []
                 while not self.check('NEWLINE') and not self.check('EOF') and not self.check('IS'): 
-                     args.append(self.parse_expression())
+                     # Check for named arg: KEYWORD/ID = Expr
+                     # Support HTML attributes like class=..., type=..., for=...
+                     is_named_arg = False
+                     if self.peek(1).type == 'ASSIGN':
+                         # Acceptable keys
+                         t_type = self.peek().type
+                         if t_type in ('ID', 'STRUCTURE', 'TYPE', 'FOR', 'IN', 'WHILE', 'IF', 'ELSE', 'FROM', 'TO', 'STRING', 'EXTENDS', 'WITH', 'PLACEHOLDER', 'NAME', 'VALUE', 'ACTION', 'METHOD', 'HREF', 'SRC', 'CLASS', 'STYLE'):
+                             is_named_arg = True
+                     
+                     if is_named_arg:
+                         key_token = self.consume()
+                         key = key_token.value
+                         self.consume('ASSIGN')
+                         val = self.parse_expression()
+                         # Pass as a dictionary node {key: val}
+                         # Since Interpreter _make_tag_fn handles dicts as attrs
+                         args.append(Dictionary([ (String(key), val) ]))
+                     else:
+                         if self.check('USING'):
+                             self.consume('USING')
+                         args.append(self.parse_expression())
+                         
+                if self.check('NEWLINE'):
+                    self.consume('NEWLINE')
+                elif self.check('INDENT'):
+                    pass
+                else:
+                    self.consume('NEWLINE')
                 
-                self.consume('NEWLINE')
-                node = Call(name, args)
+                # Check for Block Call (WebDSL style)
+                # div class="x"
+                #     p "hello"
+                body = None
+                if self.check('INDENT'):
+                    self.consume('INDENT')
+                    body = []
+                    while not self.check('DEDENT') and not self.check('EOF'):
+                        while self.check('NEWLINE'): self.consume()
+                        if self.check('DEDENT'): break
+                        body.append(self.parse_statement())
+                    self.consume('DEDENT')
+
+                node = Call(name, args, body)
                 node.line = name_token.line
                 return node
 
-            self.consume('NEWLINE')
-            # Standalone variable/identifier -> Just access it (invokes auto-call if needed)
-            # Do NOT wrap in Print (avoids printing None for void functions)
+                node = Call(name, args, body)
+                node.line = name_token.line
+                return node
+
+            if self.check('NEWLINE'):
+                self.consume('NEWLINE')
+            elif self.check('INDENT'):
+                pass
+            else:
+                 self.consume('NEWLINE')
+
+            # Standalone variable/identifier -> Just access it (via Call with 0 args to check for Block)
+            # OR could be VarAccess.
+            # But if it has a BLOCK, it MUST be a call (e.g. div \n ...)
+            
+            if self.check('INDENT'):
+                self.consume('INDENT')
+                body = []
+                while not self.check('DEDENT') and not self.check('EOF'):
+                    while self.check('NEWLINE'): self.consume()
+                    if self.check('DEDENT'): break
+                    body.append(self.parse_statement())
+                self.consume('DEDENT')
+                
+                # Treat as Call(name, [], body)
+                node = Call(name, [], body)
+                node.line = name_token.line
+                return node
+            
+            # Just access
             node = VarAccess(name)
             node.line = name_token.line
             return node
@@ -720,6 +874,38 @@ class Parser:
         node.line = start_token.line
         return node
     
+    def parse_serve(self) -> ServeStatic:
+        """Parse: serve static 'folder' at 'url' OR serve files from 'folder'"""
+        token = self.consume('SERVE')
+        
+        # Natural syntax: serve files from "public"
+        if self.check('FILES'):
+            self.consume('FILES')
+            if self.check('FROM'):
+                self.consume('FROM')
+            folder = self.parse_expression()
+            # Default URL is /static
+            url = String('/static')
+            if self.check('AT'):
+                self.consume('AT')
+                url = self.parse_expression()
+            if self.check('FOLDER'):
+                self.consume('FOLDER')
+            self.consume('NEWLINE')
+            node = ServeStatic(folder, url)
+            node.line = token.line
+            return node
+        
+        # Original syntax: serve static "folder" at "/url"
+        self.consume('STATIC')
+        folder = self.parse_expression()
+        self.consume('AT')
+        url = self.parse_expression()
+        self.consume('NEWLINE')
+        node = ServeStatic(folder, url)
+        node.line = token.line
+        return node
+
     def parse_listen(self) -> Listen:
         """Parse: listen on port 8000"""
         token = self.consume('LISTEN')
@@ -785,6 +971,102 @@ class Parser:
             
         self.consume('DEDENT')
         node = After(delay, unit, body)
+        node.line = token.line
+        return node
+
+    # === NATURAL ENGLISH WEB DSL PARSERS ===
+    
+    def parse_define_page(self) -> Node:
+        """Parse: define page Name (using args) = body"""
+        token = self.consume('DEFINE')
+        if self.check('PAGE'):
+            self.consume('PAGE')
+        
+        name = self.consume('ID').value
+        
+        # Check for arguments: define page TaskList using items
+        args = []
+        if self.check('USING'):
+            self.consume('USING')
+            args.append((self.consume('ID').value, None, None))
+            while self.check('COMMA'):
+                self.consume('COMMA')
+                args.append((self.consume('ID').value, None, None))
+        
+        self.consume('NEWLINE')
+        self.consume('INDENT')
+        
+        body = []
+        while not self.check('DEDENT') and not self.check('EOF'):
+            while self.check('NEWLINE'): self.consume()
+            if self.check('DEDENT'): break
+            body.append(self.parse_statement())
+        self.consume('DEDENT')
+        
+        # Create a FunctionDef node (reuse existing infrastructure)
+        node = FunctionDef(name, args, body)
+        node.line = token.line
+        return node
+    
+    def parse_add_to(self) -> Node:
+        """Parse: add item to list"""
+        token = self.consume('ADD')
+        item_expr = self.parse_factor_simple()
+        
+        if self.check('TO') or self.check('INTO'):
+            self.consume()
+        
+        list_name = self.consume('ID').value
+        self.consume('NEWLINE')
+        
+        # Generate: list = list + [item]
+        list_access = VarAccess(list_name)
+        item_list = ListVal([item_expr])
+        concat = BinOp(list_access, '+', item_list)
+        node = Assign(list_name, concat)
+        node.line = token.line
+        return node
+    
+    def parse_start_server(self) -> Node:
+        """Parse: start server (on port X)"""
+        token = self.consume('START')
+        if self.check('SERVER'):
+            self.consume('SERVER')
+        
+        # Default port 8080
+        port = Number(8080)
+        
+        if self.check('ON'):
+            self.consume('ON')
+            if self.check('PORT'):
+                self.consume('PORT')
+            port = self.parse_expression()
+        
+        self.consume('NEWLINE')
+        
+        node = Listen(port)
+        node.line = token.line
+        return node
+    
+    def parse_heading(self) -> Node:
+        """Parse: heading 'text' -> h1"""
+        token = self.consume('HEADING')
+        text = self.parse_expression()
+        self.consume('NEWLINE')
+        
+        # Create a Call node for 'h1' builtin
+        node = Call('h1', [text])
+        node.line = token.line
+        return node
+    
+    def parse_paragraph(self) -> Node:
+        """Parse: paragraph 'text' -> p"""
+        token = self.consume('PARAGRAPH')
+        text = self.parse_expression()
+        self.consume('NEWLINE')
+        
+        # Create a Call node for 'p' builtin
+        node = Call('p', [text])
         node.line = token.line
         return node
 
@@ -1145,6 +1427,13 @@ class Parser:
             self.consume('RPAREN')
             return expr
         elif token.type == 'INPUT' or token.type == 'ASK':
+            # Check if this is 'input type="..."' i.e. HTML tag
+            is_tag = False
+            next_t = self.peek(1)
+            if next_t.type in ('ID', 'TYPE', 'STRING', 'NAME', 'VALUE', 'CLASS', 'STYLE', 'ONCLICK', 'SRC', 'HREF', 'ACTION', 'METHOD'):
+                is_tag = True
+            if is_tag:
+                 return self.parse_id_start_statement(passed_name_token=token)
             self.consume()
             prompt = None
             if self.check('STRING'):
@@ -1169,6 +1458,17 @@ class Parser:
             right = self.parse_factor()
             node = Spawn(right)
             node.line = op.line
+            return node
+        elif token.type == 'COUNT' or token.type == 'HOW':
+            # count of x, how many x
+            token = self.consume()
+            if token.type == 'HOW':
+                self.consume('MANY')
+            if self.check('OF'):
+                self.consume('OF')
+            expr = self.parse_expression()
+            node = Call('len', [expr])
+            node.line = token.line
             return node
         elif token.type == 'AWAIT':
             op = self.consume()
@@ -1296,6 +1596,12 @@ class Parser:
             self.consume('RPAREN')
             return expr
         elif token.type == 'INPUT' or token.type == 'ASK':
+            # Check if this is 'input type="..."' i.e. HTML tag
+            next_t = self.peek(1)
+            if next_t.type in ('ID', 'TYPE', 'STRING', 'NAME', 'VALUE', 'CLASS', 'STYLE', 'ONCLICK', 'SRC', 'HREF', 'ACTION', 'METHOD'):
+                # Treat as HTML tag function call
+                self.consume() # Consume INPUT token
+                return self.parse_id_start_statement(passed_name_token=token)
             self.consume()
             prompt = None
             if self.check('STRING'):

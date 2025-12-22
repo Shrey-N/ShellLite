@@ -69,6 +69,10 @@ class Lexer:
         while pos < len(line):
             match = None
             
+
+            if line[pos] == '#':
+                break
+            
             if line[pos].isspace():
                 pos += 1
                 continue
@@ -227,6 +231,30 @@ class Lexer:
                         'bold': 'BOLD',
                         'red': 'RED', 'green': 'GREEN', 'blue': 'BLUE', 
                         'yellow': 'YELLOW', 'cyan': 'CYAN', 'magenta': 'MAGENTA',
+                        'serve': 'SERVE', 'static': 'STATIC',
+                        
+                        # === NATURAL ENGLISH WEB DSL ===
+                        # Routing
+                        'when': 'WHEN', 'someone': 'SOMEONE', 'visits': 'VISITS', 
+                        'submits': 'SUBMITS', 'start': 'START', 'server': 'SERVER',
+                        'files': 'FILES',
+                        
+                        # Page/Component creation
+                        'define': 'DEFINE', 'page': 'PAGE', 'called': 'CALLED',
+                        'using': 'USING', 'component': 'PAGE',
+                        
+                        # HTML aliases (natural names)
+                        'heading': 'HEADING', 'paragraph': 'PARAGRAPH',
+                        # 'link' removed - conflicts with HTML <link> tag
+                        'image': 'IMAGE',
+                        
+                        # List operations  
+                        'add': 'ADD', 'put': 'ADD', 'into': 'INTO',
+                        'count': 'COUNT', 'many': 'MANY', 'how': 'HOW',
+                        
+                        # Forms
+                        'field': 'FIELD', 'submit': 'SUBMIT', 'named': 'NAMED',
+                        'placeholder': 'PLACEHOLDER',
                     }
                     token_type = keywords.get(value, 'ID')
                     self.tokens.append(Token(token_type, value, self.line_number))
@@ -239,3 +267,5 @@ class Lexer:
                 self.tokens.append(Token(single_char_tokens[char], char, self.line_number))
                 pos += 1
                 continue
+
+            raise SyntaxError(f"Illegal character '{char}' at line {self.line_number}")

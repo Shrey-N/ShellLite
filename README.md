@@ -34,6 +34,19 @@ Run it:
 shl hello.shl
 ```
 
+
+### Package Manager (New!)
+You can install packages from GitHub using `shl get`:
+
+```bash
+shl get "shreyn/math-plus"
+```
+
+Then use it in your code:
+```javascript
+use "math-plus" as mp
+```
+
 ---
 
 ## Documentation

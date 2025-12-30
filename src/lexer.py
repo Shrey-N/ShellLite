@@ -256,7 +256,7 @@ class Lexer:
                         'list': 'LIST', 'set': 'SET', 'unique': 'UNIQUE', 'of': 'OF',
                         'wait': 'WAIT',
                         'convert': 'CONVERT', 'json': 'JSON',
-                        'listen': 'LISTEN', 'port': 'PORT', 'request': 'REQUEST',
+                        'listen': 'LISTEN', 'port': 'PORT',
                         'every': 'EVERY', 'minute': 'MINUTE', 'minutes': 'MINUTE',
                         'second': 'SECOND', 'seconds': 'SECOND',
                         'progress': 'PROGRESS',

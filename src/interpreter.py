@@ -258,6 +258,7 @@ class Interpreter:
             'Set': set, # Feature 6: Sets
             'show': print,
             'say': print,
+            'today': lambda: datetime.now().strftime("%Y-%m-%d"),
         }
         
         # Add basic HTML tags
@@ -270,7 +271,7 @@ class Interpreter:
             'script', 'style', 'br', 'hr',
             'header', 'footer', 'section', 'article', 'nav', 'aside', 'main',
             'strong', 'em', 'code', 'pre', 'blockquote', 'iframe', 'canvas', 'svg',
-            'css' 
+            'css', 'textarea', 'label'
         ]
         for t in tags:
             self.builtins[t] = self._make_tag_fn(t)
@@ -279,9 +280,18 @@ class Interpreter:
         self.builtins['env'] = lambda name: os.environ.get(str(name), None)
         self.builtins['int'] = lambda x: int(float(x)) if x else 0
         self.builtins['str'] = lambda x: str(x)
+        
+        class TimeWrapper:
+            def now(self):
+                return str(int(time.time()))
+        self.builtins['time'] = TimeWrapper()
 
         
         self._init_std_modules()
+        
+        # Register builtins in global environment
+        for k, v in self.builtins.items():
+            self.global_env.set(k, v)
 
     def _make_tag_fn(self, tag_name):
         # Returns a callable that creates a Tag
@@ -664,6 +674,47 @@ class Interpreter:
         value = self.visit(node.value)
         raise ReturnException(value)
 
+    def _call_function_def(self, func_def: FunctionDef, args: List[Node]):
+        # 1. Check if too many args provided
+        if len(args) > len(func_def.args):
+             raise TypeError(f"Function '{func_def.name}' expects max {len(func_def.args)} arguments, got {len(args)}")
+
+        # Create new scope
+        old_env = self.current_env
+        new_env = Environment(parent=self.global_env) 
+
+        for i, (arg_name, default_node, type_hint) in enumerate(func_def.args):
+            if i < len(args):
+                # Use provided argument
+                val = self.visit(args[i])
+            elif default_node is not None:
+                # Use default value
+                val = self.visit(default_node)
+            else:
+                raise TypeError(f"Missing required argument '{arg_name}' for function '{func_def.name}'")
+            
+            # --- Type Checking ---
+            if type_hint:
+                self._check_type(arg_name, val, type_hint)
+            
+            new_env.set(arg_name, val)
+            
+        self.current_env = new_env
+        
+        ret_val = None
+        
+        try:
+            for stmt in func_def.body:
+                val = self.visit(stmt)
+                ret_val = val
+        except ReturnException as e:
+            ret_val = e.value
+        finally:
+            self.current_env = old_env
+            
+        return ret_val
+
+
     def visit_Call(self, node: Call):
         # Check built-ins first
         if node.name in self.builtins:
@@ -747,68 +798,8 @@ class Interpreter:
             raise NameError(f"Function '{node.name}' not defined (and not a variable).")
         
         func_def = self.functions[node.name]
-        
-        # Bind args with defaults support
-        # func_def.args is List[tuple[str, Optional[Node], Optional[str]]]
-        
-        # 1. Check if too many args provided
-        if len(node.args) > len(func_def.args):
-             raise TypeError(f"Function '{node.name}' expects max {len(func_def.args)} arguments, got {len(node.args)}")
+        return self._call_function_def(func_def, node.args)
 
-        # Create new scope
-        old_env = self.current_env
-        new_env = Environment(parent=self.global_env) 
-
-        for i, (arg_name, default_node, type_hint) in enumerate(func_def.args):
-            if i < len(node.args):
-                # Use provided argument
-                val = self.visit(node.args[i])
-            elif default_node is not None:
-                # Use default value
-                val = self.visit(default_node)
-            else:
-                raise TypeError(f"Missing required argument '{arg_name}' for function '{node.name}'")
-            
-            # --- Type Checking ---
-            if type_hint:
-                self._check_type(arg_name, val, type_hint)
-            
-            new_env.set(arg_name, val)
-            
-        self.current_env = new_env
-        
-        self.current_env = new_env
-        
-        ret_val = None
-        
-        # Check if FunctionDef has a body, but Call has a body (Block)
-        # Passed as a special variable? or implicitly?
-        # User defined component:
-        # to MyComp:
-        #    div class="comp"
-        #       yield # or render children?
-        
-        try:
-            for stmt in func_def.body:
-                # If stmt is 'yield' or similar, we render node.body?
-                # For now, just run body. 
-                # If node.body exists (from call), we might want to evaluate it 
-                # and pass it as 'children' arg if defined?
-                val = self.visit(stmt)
-                # Feature: Implicit Return
-                # If the statement produced a value (expression, tag), track it.
-                # If it didn't (assignment, if, etc), it returns None.
-                # We update ret_val to the last result.
-                ret_val = val
-                
-            # If function didn't return, maybe it built a structure?
-            # But functions return explicitly usually. 
-        except ReturnException as e:
-            ret_val = e.value
-        finally:
-            self.current_env = old_env
-            
-        return ret_val
 
     def visit_ClassDef(self, node: ClassDef):
         self.classes[node.name] = node
@@ -842,14 +833,42 @@ class Interpreter:
             if node.method_name not in instance:
                 raise AttributeError(f"Module '{node.instance_name}' has no method '{node.method_name}'")
             method = instance[node.method_name]
-            if callable(method):
+            
+            if isinstance(method, FunctionDef):
+                 return self._call_function_def(method, node.args)
+            elif callable(method):
                 args = [self.visit(a) for a in node.args]
                 try:
                     return method(*args)
                 except Exception as e:
                     raise RuntimeError(f"Error calling '{node.instance_name}.{node.method_name}': {e}")
+            
+            # Support Implicit Indexing: request.form['key']
+            # If property is list/dict/str and args are indices
+            elif isinstance(method, (dict, list, str)):
+                 curr_obj = method
+                 valid_chain = True
+                 for arg_node in node.args:
+                    val = self.visit(arg_node)
+                    if isinstance(val, list) and len(val) == 1:
+                        idx = val[0]
+                        try:
+                            curr_obj = curr_obj[idx]
+                        except (IndexError, KeyError) as e:
+                            raise RuntimeError(f"Index/Key error: {e}")
+                        except TypeError:
+                             valid_chain = False; break
+                    else:
+                        valid_chain = False; break
+                 
+                 if valid_chain:
+                     return curr_obj
+                 
+                 # If we are here, it wasn't a valid index chain OR callable
+                 raise TypeError(f"Property '{node.method_name}' is not callable and index access failed.")
             else:
                  raise TypeError(f"Property '{node.method_name}' is not callable.")
+
 
 
 
@@ -931,8 +950,42 @@ class Interpreter:
             self.current_env.set(node.path, self.std_modules[node.path])
             return
 
+        # For file imports with alias
+        # 1. Check Local File
+        import os # Added import for os module
+        if os.path.exists(node.path):
+             target_path = node.path
+        # 2. Check Global Modules (~/.shell_lite/modules)
+        else:
+             home = os.path.expanduser("~")
+             global_path = os.path.join(home, ".shell_lite", "modules", node.path)
+             if os.path.exists(global_path):
+                 target_path = global_path
+             else:
+                 # Implicit .shl extension check
+                 if not node.path.endswith('.shl'):
+                     global_path_ext = global_path + ".shl"
+                     if os.path.exists(global_path_ext):
+                         target_path = global_path_ext
+                     else:
+                         raise FileNotFoundError(f"Could not find imported file: {node.path} (searched local and global modules)")
+                 else:
+                     raise FileNotFoundError(f"Could not find imported file: {node.path} (searched local and global modules)")
+
+        # Folder Support: If it's a directory, assume main.shl
+        if os.path.isdir(target_path):
+             main_shl = os.path.join(target_path, "main.shl")
+             pkg_shl = os.path.join(target_path, f"{os.path.basename(target_path)}.shl")
+             
+             if os.path.exists(main_shl):
+                 target_path = main_shl
+             elif os.path.exists(pkg_shl):
+                 target_path = pkg_shl
+             else:
+                  raise FileNotFoundError(f"Package '{node.path}' is a folder but has no 'main.shl' or '{os.path.basename(target_path)}.shl'.")
+
         try:
-            with open(node.path, 'r') as f:
+            with open(target_path, 'r', encoding='utf-8') as f:
                 code = f.read()
         except FileNotFoundError:
             raise FileNotFoundError(f"Could not find imported file: {node.path}")
@@ -1316,23 +1369,91 @@ class Interpreter:
             self.current_env.set(node.alias, self.std_modules[node.path])
             return
         
-        # For file imports with alias
-        try:
-            with open(node.path, 'r') as f:
-                code = f.read()
-        except FileNotFoundError:
-            raise FileNotFoundError(f"Could not find imported file: {node.path}")
+        # Capture current functions to detect new ones
+        old_funcs_keys = set(self.functions.keys())
+        
+        # Run module in isolated env
+        module_env = Environment(parent=self.global_env)
+        old_env = self.current_env
+        self.current_env = module_env
+        
+        # Run module in isolated env
+        module_env = Environment(parent=self.global_env)
+        old_env = self.current_env
+        self.current_env = module_env
+        
+        # 1. Check Local File
+        if os.path.exists(node.path):
+             target_path = node.path
+        # 2. Check Global Modules (~/.shell_lite/modules)
+        else:
+             home = os.path.expanduser("~")
+             global_path = os.path.join(home, ".shell_lite", "modules", node.path)
+             if os.path.exists(global_path):
+                 target_path = global_path
+             else:
+                  # Check if user omitted .shl extension for global module
+                  if not node.path.endswith('.shl'):
+                       global_path_ext = global_path + ".shl"
+                       if os.path.exists(global_path_ext):
+                            target_path = global_path_ext
+                       else:
+                            self.current_env = old_env
+                            raise FileNotFoundError(f"Could not find imported file: {node.path} (searched local and global modules)")
+                  else:
+                       self.current_env = old_env
+                       raise FileNotFoundError(f"Could not find imported file: {node.path} (searched local and global modules)")
+        
+        # Folder Support: If it's a directory, assume main.shl
+        if os.path.isdir(target_path):
+             main_shl = os.path.join(target_path, "main.shl")
+             pkg_shl = os.path.join(target_path, f"{os.path.basename(target_path)}.shl")
+             
+             if os.path.exists(main_shl):
+                 target_path = main_shl
+             elif os.path.exists(pkg_shl):
+                 target_path = pkg_shl
+             else:
+                  self.current_env = old_env
+                  raise FileNotFoundError(f"Package '{node.path}' is a folder but has no 'main.shl' or '{os.path.basename(target_path)}.shl'.")
 
-        from .lexer import Lexer
-        from .parser import Parser
-        
-        lexer = Lexer(code)
-        tokens = lexer.tokenize()
-        parser = Parser(tokens)
-        statements = parser.parse()
-        
-        for stmt in statements:
-            self.visit(stmt)
+        try:
+            with open(target_path, 'r', encoding='utf-8') as f:
+                code = f.read()
+            
+            from .lexer import Lexer
+            from .parser import Parser
+            
+            lexer = Lexer(code)
+            tokens = lexer.tokenize()
+            parser = Parser(tokens)
+            statements = parser.parse()
+            
+            for stmt in statements:
+                self.visit(stmt)
+                
+            # Create module object (dict)
+            module_exports = {}
+            # 1. Variables
+            module_exports.update(module_env.variables)
+            
+            # 2. Functions (Global pollution management)
+            current_funcs_keys = set(self.functions.keys())
+            new_funcs = current_funcs_keys - old_funcs_keys
+            
+            for fname in new_funcs:
+                func_node = self.functions[fname]
+                module_exports[fname] = func_node
+                # Remove from global to avoid pollution
+                del self.functions[fname]
+                
+            # Restore Env
+            self.current_env = old_env
+            self.current_env.set(node.alias, module_exports)
+            
+        except Exception as e:
+            self.current_env = old_env
+            raise RuntimeError(f"Failed to import '{node.path}': {e}")
 
     def visit_Forever(self, node: Forever):
         """Infinite loop - forever"""
@@ -1559,53 +1680,78 @@ class Interpreter:
             def do_POST(self):
                 # Parse POST data
                 content_length = int(self.headers.get('Content-Length', 0))
+                content_type = self.headers.get('Content-Type', '')
                 post_data = self.rfile.read(content_length).decode('utf-8')
                 
-                # Parse params (x-www-form-urlencoded)
                 params = {}
-                if post_data:
-                    parsed = urllib.parse.parse_qs(post_data)
-                    params = {k: v[0] for k, v in parsed.items()}
+                json_data = None
                 
-                self.handle_req(params)
-                
-            def handle_req(self, post_params=None):
-                if post_params is None: post_params = {}
-                path = self.path
-                if '?' in path: path = path.split('?')[0]
-                
-                interpreter_ref.global_env.set("REQUEST_METHOD", self.command) # GET or POST
-                
-                # 1. Static Routes
-                for prefix, folder in interpreter_ref.static_routes.items():
-                    if path.startswith(prefix):
-                        clean_path = path[len(prefix):]
-                        if clean_path.startswith('/'): clean_path = clean_path[1:]
-                        if clean_path == '': clean_path = 'index.html'
-                        file_path = os.path.join(folder, clean_path)
-                        
-                        if os.path.exists(file_path) and os.path.isfile(file_path):
-                             self.send_response(200)
-                             ct = 'application/octet-stream'
-                             if file_path.endswith('.css'): ct = 'text/css'
-                             elif file_path.endswith('.html'): ct = 'text/html'
-                             elif file_path.endswith('.js'): ct = 'application/javascript'
-                             self.send_header('Content-Type', ct); self.end_headers()
-                             with open(file_path, 'rb') as f: self.wfile.write(f.read())
-                             return
-
-                # 2. Dynamic Routing
-                matched_body = None
-                path_params = {}
-                for pattern, regex, body in interpreter_ref.http_routes:
-                    match = regex.match(path)
-                    if match:
-                        matched_body = body
-                        path_params = match.groupdict()
-                        break
-                
-                if matched_body:
+                if 'application/json' in content_type:
                     try:
+                        json_data = json.loads(post_data)
+                    except:
+                        pass
+                else:
+                    # Parse params (x-www-form-urlencoded)
+                    if post_data:
+                        parsed = urllib.parse.parse_qs(post_data)
+                        params = {k: v[0] for k, v in parsed.items()}
+                
+                self.handle_req(params, json_data)
+
+            def do_HEAD(self):
+                self.handle_req()
+                
+            def handle_req(self, post_params=None, json_data=None):
+                try:
+                    if post_params is None: post_params = {}
+                    path = self.path
+                    if '?' in path: path = path.split('?')[0]
+                    
+                    # Create request object
+                    req_obj = {
+                        "method": self.command, # GET, POST, HEAD
+                        "path": path,
+                        "params": post_params,
+                        "form": post_params, # Alias for form data
+                        "json": json_data
+                    }
+                    interpreter_ref.global_env.set("request", req_obj)
+                    
+                    # Also keep legacy separate vars for compatibility if needed
+                    interpreter_ref.global_env.set("REQUEST_METHOD", self.command) # GET or POST
+                    
+                    # 1. Static Routes
+                    for prefix, folder in interpreter_ref.static_routes.items():
+                        if path.startswith(prefix):
+                            clean_path = path[len(prefix):]
+                            if clean_path.startswith('/'): clean_path = clean_path[1:]
+                            if clean_path == '': clean_path = 'index.html'
+                            file_path = os.path.join(folder, clean_path)
+                            
+                            if os.path.exists(file_path) and os.path.isfile(file_path):
+                                 self.send_response(200)
+                                 ct = 'application/octet-stream'
+                                 if file_path.endswith('.css'): ct = 'text/css'
+                                 elif file_path.endswith('.html'): ct = 'text/html'
+                                 elif file_path.endswith('.js'): ct = 'application/javascript'
+                                 self.send_header('Content-Type', ct)
+                                 self.end_headers()
+                                 if self.command != 'HEAD':
+                                     with open(file_path, 'rb') as f: self.wfile.write(f.read())
+                                 return
+    
+                    # 2. Dynamic Routing
+                    matched_body = None
+                    path_params = {}
+                    for pattern, regex, body in interpreter_ref.http_routes:
+                        match = regex.match(path)
+                        if match:
+                            matched_body = body
+                            path_params = match.groupdict()
+                            break
+                    
+                    if matched_body:
                         # Middleware
                         for mw in interpreter_ref.middleware_routes:
                              for stmt in mw: interpreter_ref.visit(stmt)
@@ -1620,8 +1766,11 @@ class Interpreter:
                         response_body = ""
                         
                         result = None
-                        for stmt in matched_body:
-                            result = interpreter_ref.visit(stmt)
+                        try:
+                            for stmt in matched_body:
+                                result = interpreter_ref.visit(stmt)
+                        except ReturnException as re:
+                            result = re.value
                             
                         if interpreter_ref.web.stack:
                              # If stuff left in stack (unlikely if popped correctly), usually we explicitly return Tags
@@ -1634,11 +1783,24 @@ class Interpreter:
                         self.send_response(200)
                         self.send_header('Content-Type', 'text/html')
                         self.end_headers()
-                        self.wfile.write(response_body.encode())
-                    except Exception as e:
-                        self.send_response(500); self.wfile.write(str(e).encode())
-                else:
-                    self.send_response(404); self.wfile.write(b'Not Found')
+                        if self.command != 'HEAD':
+                            self.wfile.write(response_body.encode())
+                    else:
+                        self.send_response(404)
+                        self.end_headers()
+                        if self.command != 'HEAD':
+                            self.wfile.write(b'Not Found')
+                        
+                except Exception as e:
+                    print(f"DEBUG: Server Exception: {e}")
+                    import traceback
+                    traceback.print_exc()
+                    try:
+                        self.send_response(500)
+                        self.end_headers()
+                        if self.command != 'HEAD':
+                            self.wfile.write(str(e).encode())
+                    except: pass
 
         server = HTTPServer(('0.0.0.0', port_val), ShellLiteHandler)
         print(f"ShellLite Server running on port {port_val}...")

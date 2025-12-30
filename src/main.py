@@ -30,7 +30,7 @@ def run_file(filename: str):
     if not os.path.exists(filename):
         print(f"Error: File '{filename}' not found.")
         return
-    with open(filename, 'r') as f:
+    with open(filename, 'r', encoding='utf-8') as f:
         source = f.read()
     interpreter = Interpreter()
     execute_source(source, interpreter)
@@ -143,18 +143,92 @@ def install_globally():
     except Exception as e:
         print(f"Installation failed: {e}")
 
-def compile_file(filename: str):
+def install_package(package_name: str):
+    """
+    Downloads a package from GitHub.
+    Format: shl get user/repo
+    Target: ~/.shell_lite/modules/<repo>/ (containing main.shl or similar)
+    """
+    if '/' not in package_name:
+        print("Error: Package must be in format 'user/repo'")
+        return
+
+    user, repo = package_name.split('/')
+    print(f"Fetching '{package_name}' from GitHub...")
+    
+    # Define modules dir
+    home = os.path.expanduser("~")
+    modules_dir = os.path.join(home, ".shell_lite", "modules")
+    if not os.path.exists(modules_dir):
+        os.makedirs(modules_dir)
+        
+    # Clean up existing
+    target_dir = os.path.join(modules_dir, repo)
+    if os.path.exists(target_dir):
+        print(f"Removing existing '{repo}'...")
+        shutil.rmtree(target_dir)
+    
+    # Strategy 1: Download Main Branch ZIP
+    zip_url = f"https://github.com/{user}/{repo}/archive/refs/heads/main.zip"
+    
+    try:
+        print(f"Downloading {zip_url}...")
+        with urllib.request.urlopen(zip_url) as response:
+            zip_data = response.read()
+            
+        with zipfile.ZipFile(io.BytesIO(zip_data)) as z:
+            z.extractall(modules_dir)
+            
+        # Rename extracted folder (repo-main -> repo)
+        extracted_name = f"{repo}-main"
+        extracted_path = os.path.join(modules_dir, extracted_name)
+        
+        if os.path.exists(extracted_path):
+            os.rename(extracted_path, target_dir)
+            print(f"[SUCCESS] Installed '{repo}' to {target_dir}")
+        else:
+             print(f"Error: Could not find extracted folder '{extracted_name}'.")
+             
+        return
+
+    except urllib.error.HTTPError:
+        # Strategy 2: Try Master Branch
+         zip_url = f"https://github.com/{user}/{repo}/archive/refs/heads/master.zip"
+         try:
+            print(f"Downloading {zip_url}...")
+            with urllib.request.urlopen(zip_url) as response:
+                zip_data = response.read()
+                
+            with zipfile.ZipFile(io.BytesIO(zip_data)) as z:
+                z.extractall(modules_dir)
+                
+            # Rename extracted folder (repo-master -> repo)
+            extracted_name = f"{repo}-master"
+            extracted_path = os.path.join(modules_dir, extracted_name)
+            
+            if os.path.exists(extracted_path):
+                os.rename(extracted_path, target_dir)
+                print(f"[SUCCESS] Installed '{repo}' to {target_dir}")
+            else:
+                 print(f"Error: Could not find extracted folder '{extracted_name}'.")
+         except Exception as e:
+              print(f"Installation failed: {e}")
+              
+    except Exception as e:
+        print(f"Installation failed: {e}")
+
+
+def compile_file(filename: str, target: str = 'python'):
     if not os.path.exists(filename):
         print(f"Error: File '{filename}' not found.")
         return
 
-    print(f"Compiling {filename}...")
+    print(f"Compiling {filename} to {target.upper()}...")
     
-    with open(filename, 'r') as f:
+    with open(filename, 'r', encoding='utf-8') as f:
         source = f.read()
         
     try:
-        from .compiler import Compiler
         from .parser import Parser
         from .lexer import Lexer
         
@@ -163,32 +237,39 @@ def compile_file(filename: str):
         parser = Parser(tokens)
         statements = parser.parse()
         
-        compiler = Compiler()
-        python_code = compiler.compile(statements)
+        if target.lower() == 'js':
+            from .js_compiler import JSCompiler
+            compiler = JSCompiler()
+            code = compiler.compile(statements)
+            ext = '.js'
+        else:
+            from .compiler import Compiler
+            compiler = Compiler()
+            code = compiler.compile(statements)
+            ext = '.py'
         
-        output_file = filename.replace('.shl', '.py')
-        if output_file == filename: output_file += ".py"
+        output_file = filename.replace('.shl', ext)
+        if output_file == filename: output_file += ext
         
         with open(output_file, 'w') as f:
-            f.write(python_code)
+            f.write(code)
             
         print(f"[SUCCESS] Transpiled to {output_file}")
         
-        # Optional: Compile to EXE using PyInstaller
-        # This requires 'pyinstaller' to be installed in the user's environment.
-        try:
-            import PyInstaller.__main__
-            print("Building Executable with PyInstaller...")
-            PyInstaller.__main__.run([
-                output_file,
-                '--onefile',
-                '--name', os.path.splitext(os.path.basename(filename))[0],
-                '--log-level', 'WARN'
-            ])
-            print(f"[SUCCESS] Built {os.path.splitext(os.path.basename(filename))[0]}.exe")
-        except ImportError:
-            print("Note: PyInstaller not found. Generated .py file only.")
-            print("To build .exe, run: pip install pyinstaller")
+        if target.lower() == 'python':
+            # Optional: Compile to EXE using PyInstaller
+            try:
+                import PyInstaller.__main__
+                print("Building Executable with PyInstaller...")
+                PyInstaller.__main__.run([
+                    output_file,
+                    '--onefile',
+                    '--name', os.path.splitext(os.path.basename(filename))[0],
+                    '--log-level', 'WARN'
+                ])
+                print(f"[SUCCESS] Built {os.path.splitext(os.path.basename(filename))[0]}.exe")
+            except ImportError:
+                 pass # Silent fail regarding exe if just transpiling
 
     except Exception as e:
         print(f"Compilation Failed: {e}")
@@ -212,7 +293,7 @@ Usage:
   shl <filename.shl>    Run a ShellLite script
   shl                   Start the interactive REPL
   shl help              Show this help message
-  shl compile <file>    Compile a script to an executable
+  shl compile <file>    Compile a script (Options: --target js)
   shl install           Install ShellLite globally to your system PATH
 
 For documentation, visit: https://github.com/Shrey-N/ShellDesk
@@ -223,18 +304,29 @@ def main():
         cmd = sys.argv[1]
         if cmd == "compile" or cmd == "build":
             if len(sys.argv) > 2:
-                compile_file(sys.argv[2])
+                filename = sys.argv[2]
+                target = 'python'
+                if '--target' in sys.argv:
+                    try:
+                        idx = sys.argv.index('--target')
+                        target = sys.argv[idx+1]
+                    except IndexError:
+                        print("Error: --target requires an argument (js/python)")
+                        return
+                compile_file(filename, target)
             else:
-                print("Usage: shl compile <filename>")
+                print("Usage: shl compile <filename> [--target js]")
         elif cmd == "help" or cmd == "--help" or cmd == "-h":
             show_help()
-        elif cmd == "install":
+        elif cmd == "get":
             if len(sys.argv) > 2:
-                # Install a package
-                print(f"Installing package {sys.argv[2]}...")
+                package_name = sys.argv[2]
+                install_package(package_name)
             else:
-                # Install ShellLite itself
-                install_globally()
+                 print("Usage: shl get <user/repo>")
+        elif cmd == "install":
+            # Install ShellLite itself
+            install_globally()
         else:
             run_file(sys.argv[1])
     else:

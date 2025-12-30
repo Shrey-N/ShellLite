@@ -1,0 +1,3 @@
+use "tests/lib.shl"
+
+greet "World"

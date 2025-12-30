@@ -187,9 +187,9 @@ class Parser:
         """Parse: on file_change "path" ... OR on request to "/path" ..."""
         token = self.consume('ON')
         
-        if self.check('REQUEST'):
+        if self.check('REQUEST') or (self.check('ID') and self.peek().value == 'request'):
             # on request to "/path"
-            self.consume('REQUEST')
+            self.consume()
             if self.check('TO'): self.consume('TO')
             
             path = self.parse_expression() # path pattern
@@ -789,7 +789,9 @@ class Parser:
         elif self.check('DOT'):
             # Method call or property access (or assignment)
             self.consume('DOT')
-            member = self.consume('ID').value
+            member_token = self.consume()
+            member = member_token.value
+            # Warning: we accept ANY token as member if it follows DOT to allow keywords like 'json', 'open' etc.
             
             if self.check('ASSIGN'):
                 self.consume('ASSIGN')
@@ -1143,11 +1145,19 @@ class Parser:
         self.consume('NEWLINE')
         return Assign(name, value)
 
-    def parse_import(self) -> Import:
+    def parse_import(self) -> Node:
         token = self.consume('USE')
         path = self.consume('STRING').value
-        self.consume('NEWLINE')
-        node = Import(path)
+        
+        if self.check('AS'):
+            self.consume('AS')
+            alias = self.consume('ID').value
+            self.consume('NEWLINE')
+            node = ImportAs(path, alias)
+        else:
+            self.consume('NEWLINE')
+            node = Import(path)
+            
         node.line = token.line
         return node
 
@@ -1502,7 +1512,8 @@ class Parser:
             # Dont check for args here, just VarAccess or Dot
             if self.check('DOT'):
                 self.consume('DOT')
-                prop = self.consume('ID').value
+                prop_token = self.consume()
+                prop = prop_token.value
                 node = PropertyAccess(token.value, prop)
                 node.line = token.line
                 return node
@@ -1547,6 +1558,15 @@ class Parser:
             op = self.consume()
             right = self.parse_factor()
             node = Spawn(right)
+            node.line = op.line
+            return node
+        elif token.type == 'EXECUTE':
+            op = self.consume()
+            # run "cmd" -> convert to function call run("cmd")
+            # Argument is parse_factor or parse_expression? 
+            # run "cmd". parse_expression catches "cmd".
+            right = self.parse_expression()
+            node = Call('run', [right])
             node.line = op.line
             return node
         elif token.type == 'COUNT' or token.type == 'HOW':
@@ -1652,7 +1672,7 @@ class Parser:
             # Check for dot access in expression
             if self.check('DOT'):
                 self.consume('DOT')
-                method_name = self.consume('ID').value
+                method_name = self.consume().value
             
             args = []
             force_call = False

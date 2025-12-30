@@ -61,5 +61,11 @@ We have a comprehensive guide to help you master ShellLite:
 7.  [**System Mastery**](docs/07_System_Mastery.md) - File manipulation and desktop automation.
 8.  [**Web Development**](docs/08_Web_Development.md) - Building websites with English syntax.
 
+## Contact
+
+To help in the development, please contact **Shrey Naithani** at [contact@shelllite.tech](mailto:contact@shelllite.tech).
+
+- **Website:** [shelllite.tech](https://shelllite.tech)
+
 ---
 *Made by Shrey Naithani*

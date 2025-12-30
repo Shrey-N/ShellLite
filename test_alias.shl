@@ -1,3 +1,0 @@
-use "tests/lib.shl" as l
-
-l.greet "Alias"

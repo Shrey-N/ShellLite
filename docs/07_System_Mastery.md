@@ -75,5 +75,25 @@ result = await task
 say result
 ```
 
+
+
+## 4. Downloading Files
+You can download files directly from the web.
+```javascript
+download "https://example.com/image.png"
+# You can also rename it on save (not always supported by natural syntax yet, but acts like wget)
+```
+
+## 5. compressing and Extracting
+Manage `.zip` and other archive files.
+
+```javascript
+# Compress a folder
+compress "my_folder" to "backup.zip"
+
+# Extract an archive
+extract "backup.zip"
+```
+
 ---
 [Next: Web Development ->](08_Web_Development.md)

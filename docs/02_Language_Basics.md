@@ -15,12 +15,14 @@ is_happy = yes
 You don't need to tell ShellLite what "type" of data it is; it figures it out automatically.
 
 ### Constants
-Sometimes you want a value that *never* changes. Use `const` for this. By convention, we often use ALL CAPS for constants, but it's not required.
+Sometimes you want a value that *never* changes. Use `const` for this. By convention, we often use ALL CAPS for constants to distinguish them from regular variables, but it's not strictly required by the language.
 
 ```javascript
-const PI = 3.14
-const APP_NAME = "ShellLite"
+const PI = 3.14159
+const MAX_USERS = 100
+const APP_NAME = "ShellLite v1.0"
 ```
+*Note: If you try to change a `const` later in your code, ShellLite will throw an error.*
 
 ## 2. Data Types
 
@@ -53,17 +55,19 @@ full_name = "John" + " " + "Doe"
 ```
 
 **Interpolation:**
-You can also inject variables directly into strings using `{}`.
+You can also inject variables directly into strings using `{}`. This is often cleaner than using `+`.
 ```javascript
 name = "Shrey"
-say "Hello, {name}!"
+score = 100
+say "Player {name} has a score of {score}!"
 ```
 
 ### Booleans (Yes/No)
-Instead of `true` and `false`, ShellLite uses `yes` and `no`.
+Instead of `true` and `false`, ShellLite uses `yes` and `no` (though true/false work too).
 ```javascript
 active = yes
 sleepy = no
+is_ready = true
 ```
 
 ## 3. Output (Say)
@@ -84,12 +88,19 @@ say bold blue "Info"
 Supported colors: `red`, `green`, `blue`, `yellow`, `cyan`, `magenta`, `white`, `black`.
 
 ## 4. Input (Ask)
-To get information from the user, use `ask`.
+To get information from the user via the terminal, use the `ask` command.
+
 ```javascript
+# Simple input
 name = ask "What is your name? "
 say "Hello " + name
+
+# Using the input in logic
+age = ask "How old are you? "
+if age > 18
+    say "Access Granted"
 ```
-The program will pause and wait for the user to type something and press Enter.
+The `ask` command pauses the program, prints the prompt (if provided), and waits for the user to type something and press Enter.
 
 ## 5. Natural Language Enhancements
 

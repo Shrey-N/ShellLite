@@ -62,17 +62,30 @@ say users[0]["Name"]
 save users to csv "backup.csv"
 ```
 
-## 6. Error Handling
-Sometimes things break. Use `try/catch` to handle errors gracefully.
+## 5. Database Module (DB)
+ShellLite has a built-in interface for SQLite databases.
 
 ```javascript
-try
-    x = 10 / 0  # This will fail
-catch error
-    say "Oops, math error: " + error
-always
-    say "This runs no matter what."
+# Standard SQL operations
+db open "website.db"
+results = db query "SELECT * FROM users"
+db exec "INSERT INTO users (name) VALUES ('Alice')"
+db close
 ```
+
+## 6. JSON Module
+For parsing JSON strings into objects (since `convert to json` handles the other way).
+
+```javascript
+use "json"
+
+json_str = '{"name": "Alice"}'
+user = json.parse(json_str)
+say user["name"]
+```
+
+## 7. Error Handling
+See [Chapter 3: Control Flow](03_Control_Flow.md#4-error-handling-trycatch) for details on `try`, `catch`, and `always`.
 
 ---
 [Next: System Mastery ->](07_System_Mastery.md)

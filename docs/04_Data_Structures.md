@@ -14,6 +14,7 @@ groceries = ["Milk", "Eggs", "Bread"]
 
 # Natural style
 todo = a list of "Clean", "Cook", "Sleep"
+tasks = list of "Work", "Play"
 ```
 
 ### Accessing Items
@@ -42,13 +43,18 @@ Dictionaries store data as **Key-Value** pairs. Think of them like a real dictio
 ### Creating Dictionaries
 ```javascript
 user = {
-    name: "Shrey",
-    role: "Admin",
-    level: 99
+    "name": "Shrey",
+    "role": "Admin",
+    "level": 99
 }
 
-# OR
+# Natural Initialization
 config = a dictionary
+settings = a map
+```
+*Note: You can initialize empty dictionaries using `a dictionary` or `a map`.*
+
+```javascript
 config["theme"] = "dark"
 ```
 
@@ -74,10 +80,18 @@ Sets are great when you want to ensure no duplicates exist in your data.
 ShellLite has built-in support for JSON, the standard format for web data.
 
 ```javascript
-data = { id: 1, status: "OK" }
+```javascript
+data = { "id": 1, "status": "OK" }
+
+# Convert Object -> JSON String
 json_string = convert data to json
 say json_string
 # Output: {"id": 1, "status": "OK"}
+
+# JSON String -> Object (if needed, use the json module)
+use "json"
+obj = json.parse(json_string)
+```
 ```
 
 ---

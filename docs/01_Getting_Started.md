@@ -5,21 +5,34 @@ Welcome to ShellLite! This chapter covers everything you need to get up and runn
 ## 1. Installation
 
 ### The Easy Way (Windows Installer)
-The recommended way to use ShellLite is via the standalone executable.
-1.  Locate the compiled `shl.exe` file.
-2.  Run it. The first time you run it, if it detects it isn't installed globally, it will ask:
+The recommended way to use ShellLite is via the standalone executable `shl.exe`.
+
+1.  **Download & Run**: Locate the compiled `shl.exe` file and run it.
+2.  **Global Installation**: The first time you run it, if it detects it isn't installed globally (system-wide), it will ask:
     > "Would you like to install it so 'shl' works everywhere? (y/n)"
-3.  Type `y` and press Enter.
-4.  Close your current terminal and open a new one.
-5.  Type `shl`. You should see the ShellLite interactive prompt.
+3.  **Approve**: Type `y` and press Enter. This adds ShellLite to your system PATH.
+4.  **Verify**: Close your current terminal and open a new one. Type `shl`. You should see the ShellLite interactive prompt.
+
+> [!TIP]
+> If `shl` doesn't work after installation, try restarting your computer or checking your System Environment Variables manually.
 
 ### The Python Way (For Developers)
-If you are developing the language itself or prefer Python:
-```bash
-git clone https://github.com/Shrey-N/ShellLite.git
-cd ShellLite
-python -m src.main
-```
+If you are developing the language itself or prefer running from source:
+
+1.  **Clone the Repository**:
+    ```bash
+    git clone https://github.com/Shrey-N/ShellLite.git
+    cd ShellLite
+    ```
+2.  **Run with Python**:
+    You can execute the language directly using Python 3.
+    ```bash
+    # Enter Interactive Mode
+    python -m src.main
+
+    # Run a Script
+    python -m src.main myscript.shl
+    ```
 
 ## 2. Tools
 

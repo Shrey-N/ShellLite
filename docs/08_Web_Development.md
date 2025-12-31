@@ -43,6 +43,16 @@ when someone submits to "/login"
     HomePage
 ```
 
+
+
+### Middleware (Before Request)
+You can run code before every request, for example, to log activity or check authentication.
+
+```javascript
+before request
+    say "Incoming request to: " + request.path
+```
+
 ## 4. Serving Files
 You can serve static files (images, CSS) from a folder.
 ```javascript

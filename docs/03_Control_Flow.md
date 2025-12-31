@@ -101,6 +101,14 @@ for color in colors
     say color
 ```
 
+### Forever Loop
+Sometimes you want a program to run indefinitely, for example, a server or a background watcher.
+```javascript
+forever
+    say "I will run until stopped manually."
+    wait 1 second
+```
+
 ### Loop Control
 - `stop` or `break`: Exits the loop immediately.
 - `skip` or `continue`: Skips the rest of the current turn and goes to the next one.
@@ -109,6 +117,30 @@ for color in colors
 repeat 10 times
     if something_bad_happened
         stop
+```
+
+## 4. Error Handling (Try/Catch)
+Real world programs encounter errors. You can handle them gracefully using `try`, `catch`, and `always`.
+
+```javascript
+try
+    # Risky code
+    result = 10 / 0
+catch error
+    # This runs if there is an error
+    say in red "Oops! Something went wrong: " + error
+always
+    # This runs no matter what (success or error)
+    say "Cleanup complete."
+```
+
+## 5. Exiting the Program
+To stop your program completely at any point, use `exit`.
+
+```javascript
+if critical_system_failure
+    say in red "Shutting down!"
+    exit
 ```
 
 ---

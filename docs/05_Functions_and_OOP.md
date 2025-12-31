@@ -47,10 +47,13 @@ say square 5
 ```
 
 ## 2. Object-Oriented Programming (OOP)
-OOP allows you to create your own "types" of data. In ShellLite, we use friendly terms:
-- **thing**: Class
-- **has**: Property (Variables)
-- **can**: Method (Functions)
+OOP allows you to create your own "types" of data. In ShellLite, we use friendly terms, but traditional ones work too:
+
+| Term | Aliases | Description |
+|---|---|---|
+| **thing** | `structure`, `class` | Defines a new type (blueprint) |
+| **has** | `with` | Defines a property (variable) |
+| **can** | `to` | Defines a method (function) |
 
 ### Defining a Thing
 ```javascript
@@ -63,14 +66,20 @@ thing Car
         speed += amount
         say "Vroom! Going " + speed
 ```
+*You can also write `structure Car` or `class Car` if you prefer.*
 
 ### Creating and Using Objects
-Use `new` or `make`.
+Use `new` or `make` to create an instance of your Thing.
+
 ```javascript
 my_car = new Car
+# OR
+my_car = make Car
+
 my_car.make = "Tesla"
 my_car.drive 50
 ```
+Arguments passed to `make` or `new` are not currently passed to a constructor in this version, but you can define an `init` method and call it manually if needed.
 
 ### Inheritance
 You can create a new Thing that builds upon an old Thing using `extends`.

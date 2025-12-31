@@ -19,6 +19,16 @@ ShellLite is easiest to install globally on Windows.
     shl
     ```
     If you see the `>>>` prompt, you are ready to go!
+    
+### Alternative: Install via Pip
+```bash
+pip install shell-lite
+```
+
+### Editor Support
+Get the official extension for syntax highlighting and snippets.
+- [**VS Code Marketplace**](https://marketplace.visualstudio.com/items?itemName=shelllite.shelllite-hello)
+- [**OpenVSX**](https://open-vsx.org/extension/shelllite/shelllite-hello)
 
 ### Your First Program
 Create a file named `hello.shl`:

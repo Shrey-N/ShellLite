@@ -18,7 +18,6 @@ import tkinter as tk
 from tkinter import messagebox, simpledialog
 
 
-# --- Exceptions ---
 class ReturnException(Exception):
     def __init__(self, value):
         self.value = value
@@ -34,7 +33,6 @@ class ShellLiteError(Exception):
         self.message = message
         super().__init__(message)
 
-# --- Data Structures ---
 class Environment:
     def __init__(self, parent=None):
         self.variables: Dict[str, Any] = {}
@@ -61,9 +59,6 @@ class Environment:
         self.variables[name] = value
         self.constants.add(name)
 
-# We need ClassDef for Instance to hold reference? 
-# To avoid circular imports, we just treat class_def as Any or a simple object for now.
-# Or we can redefine a simple RuntimeClassDef if needed, but for now we'll stick to dynamic typing.
 
 class Instance:
     def __init__(self, class_def: Any):
@@ -113,7 +108,6 @@ class WebBuilder:
         if self.stack:
             self.stack[-1].add(text)
 
-# --- Builtin Functions (Standalone) ---
 
 def slang_run(cmd):
     try:
@@ -346,7 +340,6 @@ def slang_confirm(prompt):
     return val
 
 
-# Standard Modules Definition (Moved here for reuse)
 def get_std_modules():
     return {
         'math': {
@@ -420,7 +413,6 @@ def slang_push(lst, item):
     lst.append(item)
     return None
 
-# Builtin functions map for the Environment
 def get_builtins():
     return {
         'str': str, 'int': int, 'float': float, 'bool': bool,

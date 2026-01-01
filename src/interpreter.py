@@ -27,7 +27,6 @@ from datetime import timedelta
 import calendar
 import sqlite3
 
-# Optional dependencies handling
 try:
     import keyboard
     import mouse
@@ -52,7 +51,6 @@ class Environment:
         raise NameError(f"Variable '{name}' is not defined.")
 
     def set(self, name: str, value: Any):
-        # Check if it's a constant
         if name in self.constants:
             raise RuntimeError(f"Cannot reassign constant '{name}'")
         if self.parent and name in self.parent.constants:
@@ -122,28 +120,20 @@ class Tag:
         self.children: List[Any] = []
         
     def add(self, child):
-        # Prevent double-addition (once by push, once by return value capture)
-        # Equality check might be expensive if deep, use identity for objects?
-        # But 'child' can be string.
-        # String duplicates are allowed.
-        # Tag duplicates (identity) are not.
         if isinstance(child, Tag):
              if any(c is child for c in self.children):
                  return
         self.children.append(child)
         
     def __str__(self):
-        # Render attributes
         attr_str = ""
         for k, v in self.attrs.items():
             attr_str += f' {k}="{v}"'
             
-        # Render children
         inner = ""
         for child in self.children:
             inner += str(child)
             
-        # Void tags?
         if self.name in ('img', 'br', 'hr', 'input', 'meta', 'link'):
             return f"<{self.name}{attr_str} />"
             
@@ -168,7 +158,6 @@ class WebBuilder:
         if self.stack:
             self.stack[-1].add(text)
         else:
-            # If no root tag, maybe we just print? No, assume returning string
             pass
 
 class Interpreter:
@@ -184,7 +173,6 @@ class Interpreter:
         self.db_conn = None
 
         
-        # Built-in functions
         self.builtins = {
             'str': str, 'int': int, 'float': float, 'bool': bool,
             'list': list, 'len': len,
@@ -261,8 +249,6 @@ class Interpreter:
             'today': lambda: datetime.now().strftime("%Y-%m-%d"),
         }
         
-        # Add basic HTML tags
-        # Web DSL Tags
         tags = [
             'div', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 
             'span', 'a', 'img', 'button', 'input', 'form', 
@@ -276,7 +262,6 @@ class Interpreter:
         for t in tags:
             self.builtins[t] = self._make_tag_fn(t)
             
-        # System Builtins
         self.builtins['env'] = lambda name: os.environ.get(str(name), None)
         self.builtins['int'] = lambda x: int(float(x)) if x else 0
         self.builtins['str'] = lambda x: str(x)
@@ -289,23 +274,11 @@ class Interpreter:
         
         self._init_std_modules()
         
-        # Register builtins in global environment
         for k, v in self.builtins.items():
             self.global_env.set(k, v)
 
     def _make_tag_fn(self, tag_name):
-        # Returns a callable that creates a Tag
         def tag_fn(*args):
-            # Parse args: 
-            # 1. Strings are text content (optional, mostly for single line)
-            # 2. Assign/PropAssign? No, standard args here.
-            # ShellLite doesn't have keyword args in Call node generically yet for builtins.
-            # But we often pass "class='foo'". This comes as a String "class=foo" if user types it?
-            # Or dictionary?
-            # Convention: 
-            #  - Strings with '=' are attributes
-            #  - Strings without '=' are text content
-            #  - Dicts are attributes
             
             attrs = {}
             content = []
@@ -315,7 +288,6 @@ class Interpreter:
                     attrs.update(arg)
                 elif isinstance(arg, str):
                     if '=' in arg and not ' ' in arg and arg.split('=')[0].isalnum():
-                        # Simple attribute parsing: id=main
                         k, v = arg.split('=', 1)
                         attrs[k] = v
                     else:
@@ -327,10 +299,6 @@ class Interpreter:
             for c in content:
                 t.add(c)
                 
-            # If we are in a web stack, this is already added by push?
-            # But wait, visit_Call will handle the BLOCK by passing context.
-            # This function just creates the Node. 
-            # The 'block' handling must be in visit_Call.
             return t
         return tag_fn
 
@@ -506,14 +474,11 @@ class Interpreter:
         except NameError:
             if node.name in self.builtins:
                 val = self.builtins[node.name]
-                # Auto-call 0-arg getters for convenience
                 if node.name in ('random', 'time_now', 'date_str'):
                     return val()
                 return val
             
-            # Check if it's a known function (Auto-call 0-arg / default arg functions)
             if node.name in self.functions:
-                # Delegate to visit_Call with empty arguments
                 return self.visit_Call(Call(node.name, []))
 
             raise
@@ -567,9 +532,7 @@ class Interpreter:
     def visit_Print(self, node: Print):
         value = self.visit(node.expression)
         
-        # Apply colors/styles
         if node.color or node.style:
-            # Color map
             colors = {
                 'red': '91', 'green': '92', 'yellow': '93', 'blue': '94',
                 'magenta': '95', 'cyan': '96'
@@ -667,7 +630,6 @@ class Interpreter:
         raise Exception(f"Unknown unary operator: {node.op}")
 
     def visit_FunctionDef(self, node: FunctionDef):
-        # Store function definition
         self.functions[node.name] = node
         
     def visit_Return(self, node: Return):
@@ -675,25 +637,20 @@ class Interpreter:
         raise ReturnException(value)
 
     def _call_function_def(self, func_def: FunctionDef, args: List[Node]):
-        # 1. Check if too many args provided
         if len(args) > len(func_def.args):
              raise TypeError(f"Function '{func_def.name}' expects max {len(func_def.args)} arguments, got {len(args)}")
 
-        # Create new scope
         old_env = self.current_env
         new_env = Environment(parent=self.global_env) 
 
         for i, (arg_name, default_node, type_hint) in enumerate(func_def.args):
             if i < len(args):
-                # Use provided argument
                 val = self.visit(args[i])
             elif default_node is not None:
-                # Use default value
                 val = self.visit(default_node)
             else:
                 raise TypeError(f"Missing required argument '{arg_name}' for function '{func_def.name}'")
             
-            # --- Type Checking ---
             if type_hint:
                 self._check_type(arg_name, val, type_hint)
             
@@ -716,59 +673,39 @@ class Interpreter:
 
 
     def visit_Call(self, node: Call):
-        # Check built-ins first
         if node.name in self.builtins:
              args = [self.visit(a) for a in node.args]
              result = self.builtins[node.name](*args)
              
-             # If this is a Tag and we have a block body
              if isinstance(result, Tag):
                  if node.body:
                      self.web.push(result)
                      try:
                          for stmt in node.body:
                              res = self.visit(stmt)
-                             # If stmt expression returns a string/Tag, add it?
-                             # In ShellLite, statements don't naturally return unless expression stmt.
-                             # visit(Expression) returns value.
-                             # We should auto-add expression results to current tag?
                              if res is not None and (isinstance(res, str) or isinstance(res, Tag)):
                                  self.web.add_text(res)
                      finally:
                          self.web.pop()
-                 # If it's a top-level tag in a route, we probably want to return it?
-                 # But 'result' is the tag itself.
-                 # If we pushed it, we populated it.
                  return result
              
              return result
 
-        # Check for lambda/callable in environment
-        # Check for lambda/callable/object in environment
         try:
             func = self.current_env.get(node.name)
             if callable(func):
                 args = [self.visit(a) for a in node.args]
                 return func(*args)
             
-            # Feature: Implicit Indexing via [...] syntax
-            # If obj is List/Dict/Str/Instance.
-            # parsed: name [i] [j] -> Call(name, [ListVal([i]), ListVal([j])])
             
             curr_obj = func
             if (isinstance(curr_obj, (list, dict, str)) or isinstance(curr_obj, Instance)):
-                # Try to apply indexing for ALL args sequentially
-                # Verify ALL args are ListVal-like (wrapped in list of 1)
                 
-                # We interpret this as chained access ONLY if object is not callable
-                # (Lists/Dicts are not callable, so safe)
                 
-                # Check args
                 valid_chain = True
                 for arg_node in node.args:
                     val = self.visit(arg_node)
                     if isinstance(val, list) and len(val) == 1:
-                        # It's an index wrapper
                         idx = val[0]
                         try:
                             curr_obj = curr_obj[idx]
@@ -783,9 +720,6 @@ class Interpreter:
                 if valid_chain:
                     return curr_obj
                 
-                # If invalid chain, we fall through to "pass" -> NameError?
-                # Or maybe user tried to call a List with parens? list(1)?
-                # We can error here explicitly if we want.
                 pass
                 
         except NameError:
@@ -810,7 +744,6 @@ class Interpreter:
             
         class_def = self.classes[node.class_name]
         
-        # Get all properties including inherited
         all_properties = self._get_class_properties(class_def)
         
         if len(node.args) != len(all_properties):
@@ -821,14 +754,12 @@ class Interpreter:
             val = self.visit(arg_expr)
             instance.data[prop] = val
             
-        # Store instance in variable
         self.current_env.set(node.var_name, instance)
         return instance
 
     def visit_MethodCall(self, node: MethodCall):
         instance = self.current_env.get(node.instance_name)
         
-        # Support native modules (dicts of callables)
         if isinstance(instance, dict):
             if node.method_name not in instance:
                 raise AttributeError(f"Module '{node.instance_name}' has no method '{node.method_name}'")
@@ -843,8 +774,6 @@ class Interpreter:
                 except Exception as e:
                     raise RuntimeError(f"Error calling '{node.instance_name}.{node.method_name}': {e}")
             
-            # Support Implicit Indexing: request.form['key']
-            # If property is list/dict/str and args are indices
             elif isinstance(method, (dict, list, str)):
                  curr_obj = method
                  valid_chain = True
@@ -864,7 +793,6 @@ class Interpreter:
                  if valid_chain:
                      return curr_obj
                  
-                 # If we are here, it wasn't a valid index chain OR callable
                  raise TypeError(f"Property '{node.method_name}' is not callable and index access failed.")
             else:
                  raise TypeError(f"Property '{node.method_name}' is not callable.")
@@ -872,7 +800,6 @@ class Interpreter:
 
 
 
-        # Fallback: Support native Python methods on ANY object (e.g. Set.add, Str.upper)
         if hasattr(instance, node.method_name) and callable(getattr(instance, node.method_name)):
              method = getattr(instance, node.method_name)
              args = [self.visit(a) for a in node.args]
@@ -881,22 +808,17 @@ class Interpreter:
         if not isinstance(instance, Instance):
             raise TypeError(f"'{node.instance_name}' is not a structure instance (and has no native method '{node.method_name}').")
             
-        # Find method in class (with inheritance)
         method_node = self._find_method(instance.class_def, node.method_name)
         
         if not method_node:
             raise AttributeError(f"Structure '{instance.class_def.name}' has no method '{node.method_name}'")
             
-        # Execute method
-        # Create scope
         old_env = self.current_env
         new_env = Environment(parent=self.global_env)
         
-        # Bind properties to scope
         for k, v in instance.data.items():
             new_env.set(k, v)
         
-        # Bind args with defaults support (for methods)
         if len(node.args) > len(method_node.args):
              raise TypeError(f"Method '{node.method_name}' expects max {len(method_node.args)} arguments.")
 
@@ -919,7 +841,6 @@ class Interpreter:
         except ReturnException as e:
             ret_val = e.value
         finally:
-            # Sync properties back to instance data for state mutation support
             for k in instance.data.keys():
                 if k in new_env.variables:
                     instance.data[k] = new_env.variables[k]
@@ -935,34 +856,26 @@ class Interpreter:
                 raise AttributeError(f"Structure '{instance.class_def.name}' has no property '{node.property_name}'")
             return instance.data[node.property_name]
         elif isinstance(instance, dict):
-             # Support data.x for {"x": 1}
              if node.property_name in instance:
                  return instance[node.property_name]
-             # Also assume the user might have used keys that match property name
              raise AttributeError(f"Dictionary has no key '{node.property_name}'")
         
         raise TypeError(f"'{node.instance_name}' is not a structure instance or dictionary.")
 
     def visit_Import(self, node: Import):
         if node.path in self.std_modules:
-            # Import standard module as a dictionary property
-            # To support 'math.sin', we set 'math' variable to the dict
             self.current_env.set(node.path, self.std_modules[node.path])
             return
 
-        # For file imports with alias
-        # 1. Check Local File
         import os # Added import for os module
         if os.path.exists(node.path):
              target_path = node.path
-        # 2. Check Global Modules (~/.shell_lite/modules)
         else:
              home = os.path.expanduser("~")
              global_path = os.path.join(home, ".shell_lite", "modules", node.path)
              if os.path.exists(global_path):
                  target_path = global_path
              else:
-                 # Implicit .shl extension check
                  if not node.path.endswith('.shl'):
                      global_path_ext = global_path + ".shl"
                      if os.path.exists(global_path_ext):
@@ -972,7 +885,6 @@ class Interpreter:
                  else:
                      raise FileNotFoundError(f"Could not find imported file: {node.path} (searched local and global modules)")
 
-        # Folder Support: If it's a directory, assume main.shl
         if os.path.isdir(target_path):
              main_shl = os.path.join(target_path, "main.shl")
              pkg_shl = os.path.join(target_path, f"{os.path.basename(target_path)}.shl")
@@ -1001,14 +913,12 @@ class Interpreter:
         for stmt in statements:
             self.visit(stmt)
 
-    # --- Helper methods for Inheritance ---
     def _get_class_properties(self, class_def: ClassDef) -> List[str]:
         props = list(class_def.properties)
         if class_def.parent:
             if class_def.parent not in self.classes:
                 raise NameError(f"Parent class '{class_def.parent}' not defined.")
             parent_def = self.classes[class_def.parent]
-            # Parent props come first? Or child? Usually parent first in args.
             return self._get_class_properties(parent_def) + props
         return props
 
@@ -1026,12 +936,9 @@ class Interpreter:
         return None
 
     
-    # --- Built-in Implementations ---
     
     def builtin_run(self, cmd):
-        # Run shell command
         try:
-            # shell=True allows full shell syntax
             result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
             if result.returncode != 0:
                 print(f"Command Error: {result.stderr}")
@@ -1062,7 +969,6 @@ class Interpreter:
             
     def builtin_json_stringify(self, obj):
         try:
-            # Convert internal Instance objects to dicts if possible?
             if isinstance(obj, Instance):
                 return json.dumps(obj.data)
             return json.dumps(obj)
@@ -1078,7 +984,6 @@ class Interpreter:
             
     def builtin_http_post(self, url, data_dict):
         try:
-            # Ensure data_dict is a valid dictionary/object
             if isinstance(data_dict, Instance):
                 data_dict = data_dict.data
                 
@@ -1089,7 +994,6 @@ class Interpreter:
         except Exception as e:
             raise RuntimeError(f"HTTP POST failed for '{url}': {e}")
 
-    # --- New Feature Visitors ---
     
     def visit_Lambda(self, node: Lambda):
         """Create a callable lambda function"""
@@ -1119,7 +1023,6 @@ class Interpreter:
             for item in iterable:
                 new_env.set(node.var_name, item)
                 
-                # Check condition if present
                 if node.condition:
                     if not self.visit(node.condition):
                         continue
@@ -1134,7 +1037,6 @@ class Interpreter:
         """Spread operator - returns the value to be spread"""
         return self.visit(node.value)
 
-    # --- GUI Features ---
     def visit_Alert(self, node: Alert):
         msg = self.visit(node.message)
         root = tk.Tk()
@@ -1161,19 +1063,11 @@ class Interpreter:
         root.destroy()
         return val
 
-    # --- Async Features ---
     def visit_Spawn(self, node: Spawn):
-        # Use a Future to hold result
         executor = concurrent.futures.ThreadPoolExecutor(max_workers=1)
         
-        # We need to capture the current env context if we want to share variables?
-        # But typical threading shares memory.
-        # self.visit uses self.current_env.
-        # Races are possible but expected in this simple model.
         
         future = executor.submit(self.visit, node.call)
-        # We don't shutdown executor immediately, let it hang or cache it?
-        # If we create new executor every time, it's inefficient but safe.
         return future
 
     def visit_Await(self, node: Await):
@@ -1182,7 +1076,6 @@ class Interpreter:
             return task.result()
         raise TypeError(f"Cannot await non-task object: {type(task)}")
 
-    # --- Regex ---
     def visit_Regex(self, node: Regex):
         return re.compile(node.pattern)
 
@@ -1190,8 +1083,6 @@ class Interpreter:
         """Watch a file for changes"""
         path = self.visit(node.path)
         if not os.path.exists(path):
-            # Maybe wait for creation?
-            # For simplicity, error or wait.
             print(f"Warning: Watching non-existent file {path}")
             last_mtime = 0
         else:
@@ -1204,7 +1095,6 @@ class Interpreter:
                     current_mtime = os.path.getmtime(path)
                     if current_mtime != last_mtime:
                         last_mtime = current_mtime
-                        # Execute body
                         for stmt in node.body:
                             self.visit(stmt)
                 
@@ -1274,7 +1164,6 @@ class Interpreter:
         else:
             raise TypeError(f"'{type(obj).__name__}' object is not subscriptable")
 
-    # --- New English-like feature visitors ---
 
     def visit_Stop(self, node: Stop):
         """Break out of a loop"""
@@ -1339,7 +1228,6 @@ class Interpreter:
                     self.visit(stmt)
                 return
         
-        # No match found, run otherwise
         if node.otherwise:
             for stmt in node.otherwise:
                 self.visit(stmt)
@@ -1369,30 +1257,24 @@ class Interpreter:
             self.current_env.set(node.alias, self.std_modules[node.path])
             return
         
-        # Capture current functions to detect new ones
         old_funcs_keys = set(self.functions.keys())
         
-        # Run module in isolated env
         module_env = Environment(parent=self.global_env)
         old_env = self.current_env
         self.current_env = module_env
         
-        # Run module in isolated env
         module_env = Environment(parent=self.global_env)
         old_env = self.current_env
         self.current_env = module_env
         
-        # 1. Check Local File
         if os.path.exists(node.path):
              target_path = node.path
-        # 2. Check Global Modules (~/.shell_lite/modules)
         else:
              home = os.path.expanduser("~")
              global_path = os.path.join(home, ".shell_lite", "modules", node.path)
              if os.path.exists(global_path):
                  target_path = global_path
              else:
-                  # Check if user omitted .shl extension for global module
                   if not node.path.endswith('.shl'):
                        global_path_ext = global_path + ".shl"
                        if os.path.exists(global_path_ext):
@@ -1404,7 +1286,6 @@ class Interpreter:
                        self.current_env = old_env
                        raise FileNotFoundError(f"Could not find imported file: {node.path} (searched local and global modules)")
         
-        # Folder Support: If it's a directory, assume main.shl
         if os.path.isdir(target_path):
              main_shl = os.path.join(target_path, "main.shl")
              pkg_shl = os.path.join(target_path, f"{os.path.basename(target_path)}.shl")
@@ -1432,22 +1313,17 @@ class Interpreter:
             for stmt in statements:
                 self.visit(stmt)
                 
-            # Create module object (dict)
             module_exports = {}
-            # 1. Variables
             module_exports.update(module_env.variables)
             
-            # 2. Functions (Global pollution management)
             current_funcs_keys = set(self.functions.keys())
             new_funcs = current_funcs_keys - old_funcs_keys
             
             for fname in new_funcs:
                 func_node = self.functions[fname]
                 module_exports[fname] = func_node
-                # Remove from global to avoid pollution
                 del self.functions[fname]
                 
-            # Restore Env
             self.current_env = old_env
             self.current_env.set(node.alias, module_exports)
             
@@ -1498,17 +1374,11 @@ class Interpreter:
         
         if node.target_format.lower() == 'json':
              if isinstance(val, str):
-                 # Convert string TO json object (parse)
                  try:
                      return json.loads(val)
                  except: # If it fails, maybe they meant to stringify? No, "convert X to json" usually means make it json string?
-                     # Ambiguity: "convert dict to json" -> stringify
-                     # "convert string to json" -> parse?
-                     # Prompt said: json_string = convert my_data to json
-                     # So it means SERIALIZE (stringify)
                      return json.dumps(val) 
              else:
-                 # Serialize
                  if isinstance(val, Instance):
                      return json.dumps(val.data)
                  return json.dumps(val) # default
@@ -1516,9 +1386,6 @@ class Interpreter:
         raise ValueError(f"Unknown conversion format: {node.target_format}")
 
     def visit_ProgressLoop(self, node: ProgressLoop):
-        # We need to wrap the loop execution with progress bar
-        # How to hook into iteration?
-        # Only support For, ForIn, Repeat
         
         loop = node.loop_node
         
@@ -1528,12 +1395,10 @@ class Interpreter:
              
              print(f"Progress: [                    ] 0%", end='\r')
              for i in range(count):
-                 # update bar
                  percent = int((i / count) * 100)
                  bar = '=' * int(percent / 5)
                  print(f"Progress: [{bar:<20}] {percent}%", end='\r')
                  
-                 # Exec body
                  try:
                      for stmt in loop.body:
                          self.visit(stmt)
@@ -1542,7 +1407,6 @@ class Interpreter:
              print(f"Progress: [{'='*20}] 100%           ")
              
         elif isinstance(loop, For):
-             # range based
              count = self.visit(loop.count)
              for i in range(count):
                  percent = int((i / count) * 100)
@@ -1556,12 +1420,9 @@ class Interpreter:
              print(f"Progress: [{'='*20}] 100%           ")
 
         elif isinstance(loop, ForIn):
-            # We need length of iterable
             iterable = self.visit(loop.iterable)
             total = len(iterable) if hasattr(iterable, '__len__') else 0
             
-            # Can't use generator directly if we want progress, convert to list if needed?
-            # Or just iterate
             
             i = 0
             for item in iterable:
@@ -1570,7 +1431,6 @@ class Interpreter:
                     bar = '=' * int(percent / 5)
                     print(f"Progress: [{bar:<20}] {percent}%", end='\r')
                 
-                # Bind var
                 self.current_env.set(loop.var_name, item)
                 
                 try:
@@ -1618,7 +1478,6 @@ class Interpreter:
             columns = [description[0] for description in cursor.description] if cursor.description else []
             rows = cursor.fetchall()
             
-            # Return list of dictionaries
             result = []
             for row in rows:
                 result.append(dict(zip(columns, row)))
@@ -1628,7 +1487,6 @@ class Interpreter:
         folder = str(self.visit(node.folder))
         url_prefix = str(self.visit(node.url))
         
-        # Ensure url prefix starts with / 
         if not url_prefix.startswith('/'): url_prefix = '/' + url_prefix
         
         if not os.path.isdir(folder):
@@ -1653,7 +1511,6 @@ class Interpreter:
         for stmt in node.body: self.visit(stmt)
 
     def visit_OnRequest(self, node: OnRequest):
-        # path can be string pattern: "/users/:id"
         path_str = self.visit(node.path)
         
         if path_str == '__middleware__':
@@ -1678,7 +1535,6 @@ class Interpreter:
                 self.handle_req()
             
             def do_POST(self):
-                # Parse POST data
                 content_length = int(self.headers.get('Content-Length', 0))
                 content_type = self.headers.get('Content-Type', '')
                 post_data = self.rfile.read(content_length).decode('utf-8')
@@ -1692,7 +1548,6 @@ class Interpreter:
                     except:
                         pass
                 else:
-                    # Parse params (x-www-form-urlencoded)
                     if post_data:
                         parsed = urllib.parse.parse_qs(post_data)
                         params = {k: v[0] for k, v in parsed.items()}
@@ -1708,7 +1563,6 @@ class Interpreter:
                     path = self.path
                     if '?' in path: path = path.split('?')[0]
                     
-                    # Create request object
                     req_obj = {
                         "method": self.command, # GET, POST, HEAD
                         "path": path,
@@ -1718,10 +1572,8 @@ class Interpreter:
                     }
                     interpreter_ref.global_env.set("request", req_obj)
                     
-                    # Also keep legacy separate vars for compatibility if needed
                     interpreter_ref.global_env.set("REQUEST_METHOD", self.command) # GET or POST
                     
-                    # 1. Static Routes
                     for prefix, folder in interpreter_ref.static_routes.items():
                         if path.startswith(prefix):
                             clean_path = path[len(prefix):]
@@ -1741,7 +1593,6 @@ class Interpreter:
                                      with open(file_path, 'rb') as f: self.wfile.write(f.read())
                                  return
     
-                    # 2. Dynamic Routing
                     matched_body = None
                     path_params = {}
                     for pattern, regex, body in interpreter_ref.http_routes:
@@ -1752,11 +1603,9 @@ class Interpreter:
                             break
                     
                     if matched_body:
-                        # Middleware
                         for mw in interpreter_ref.middleware_routes:
                              for stmt in mw: interpreter_ref.visit(stmt)
 
-                        # Inject Params (Path and POST)
                         for k, v in path_params.items():
                             interpreter_ref.global_env.set(k, v)
                         for k, v in post_params.items():
@@ -1773,7 +1622,6 @@ class Interpreter:
                             result = re.value
                             
                         if interpreter_ref.web.stack:
-                             # If stuff left in stack (unlikely if popped correctly), usually we explicitly return Tags
                              pass
                              
                         if isinstance(result, Tag): response_body = str(result)
@@ -1895,7 +1743,6 @@ class Interpreter:
             
             if not data: return # Nothing to write
             
-            # Normalize data: if it's Instance objects, conv to dict
             rows = []
             for item in data:
                  if isinstance(item, Instance):
@@ -1953,8 +1800,6 @@ class Interpreter:
         if node.expr == 'today':
             return datetime.now().strftime("%Y-%m-%d")
         
-        # Simple parser for "next friday", "tomorrow"
-        # This is basic logic; proper NLP date parsing (like dateparser lib) is better but heavy.
         today = datetime.now()
         s = node.expr.lower().strip()
         

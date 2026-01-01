@@ -26,13 +26,11 @@ class JSCompiler:
             stmt_code = self.visit(stmt)
             if not stmt_code: continue
             
-            # Formatting
             indented_stmt = "\n".join([f"{self.indent()}{line}" for line in stmt_code.split('\n')])
             code += indented_stmt + "\n"
         return code.rstrip()
 
     def compile(self, statements: List[Node]) -> str:
-        # Preamble / Runtime
         code = [
             "// ShellLite Runtime (JS)",
             "const fs = require('fs');",
@@ -59,7 +57,6 @@ class JSCompiler:
         code.append(self.compile_block(statements))
         return "\n".join(code)
 
-    # --- Visitor Methods ---
 
     def visit_Number(self, node: Number):
         return str(node.value)
@@ -78,7 +75,6 @@ class JSCompiler:
         return f"[{', '.join(elements)}]"
 
     def visit_Dictionary(self, node: Dictionary):
-        # JS Objects for Dicts
         pairs = [f"{self.visit(k)}: {self.visit(v)}" for k, v in node.pairs]
         return f"{{{', '.join(pairs)}}}"
         
@@ -90,13 +86,6 @@ class JSCompiler:
         return node.name
 
     def visit_Assign(self, node: Assign):
-        # We assume 'let' or 'const' isn't strictly needed if we reuse vars,
-        # but in strict mode we might need it. 
-        # For simplicity, we'll try to use assignments directly.
-        # Ideally we track scope to emit 'let' on first use?
-        # ShellLite is dynamic. Let's assume Global/Function scope and just emit `name = value`.
-        # However, in strict JS, undeclared vars are errors.
-        # We might need a "let name;" preamble or just use `var`?
         return f"var {node.name} = {self.visit(node.value)};"
 
     def visit_ConstAssign(self, node: ConstAssign):
@@ -130,7 +119,6 @@ class JSCompiler:
         return f"console.log({self.visit(node.expression)});"
         
     def visit_Input(self, node: Input):
-        # JS doesn't have synchronous input easily in Node without libs.
         return f"require('readline-sync').question({repr(node.prompt) if node.prompt else '\"\"'})"
 
     def visit_If(self, node: If):
@@ -157,8 +145,6 @@ class JSCompiler:
         return code
 
     def visit_For(self, node: For):
-        # range loop
-        # for (let i = 0; i < count; i++)
         count = self.visit(node.count)
         var = f"_i_{random.randint(0,1000)}"
         code = f"for (let {var} = 0; {var} < {count}; {var}++) {{\n"
@@ -203,7 +189,6 @@ class JSCompiler:
         code = f"class {node.name}{extends} {{\n"
         self.indentation += 1
         
-        # Constructor
         if node.properties:
             props = node.properties
             code += f"{self.indent()}constructor({', '.join(props)}) {{\n"
@@ -214,7 +199,6 @@ class JSCompiler:
             self.indentation -= 1
             code += f"{self.indent()}}}\n"
             
-        # Methods
         for m in node.methods:
              args = [arg[0] for arg in m.args]
              code += f"\n{self.indent()}{m.name}({', '.join(args)}) {{\n"
@@ -239,7 +223,6 @@ class JSCompiler:
         return f"{node.instance_name}.{node.property_name}"
 
     def visit_Import(self, node: Import):
-        # require
         base = node.path
         if base == 'vscode': return 'const vscode = require("vscode");'
         return f"const {base} = require('./{base}');"
@@ -273,10 +256,4 @@ class JSCompiler:
         return f"({', '.join(node.params)}) => {self.visit(node.body)}"
         
     def visit_Execute(self, node: Execute):
-         # on execute command "id"
-         # This is specific for VS Code extension logic usually?
-         # Or just generic event listener mechanism?
-         # "on request to" was OnRequest.
-         # This needs a new generic "on event" node or handled via Call?
-         # Assuming user writes standard shl: `vscode.commands.registerCommand(...)`
          pass

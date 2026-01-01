@@ -1,4 +1,3 @@
-# Simple test
 say "--- Basic Tests ---"
 say "1. Repeat:"
 repeat 3 times

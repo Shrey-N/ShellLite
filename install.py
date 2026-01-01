@@ -14,7 +14,6 @@ def is_admin():
 def add_to_path(folder_path):
     folder_path = str(folder_path)
     try:
-        # Open User Environment Key
         key = winreg.OpenKey(winreg.HKEY_CURRENT_USER, "Environment", 0, winreg.KEY_ALL_ACCESS)
         try:
             path_val, _ = winreg.QueryValueEx(key, "Path")
@@ -25,8 +24,6 @@ def add_to_path(folder_path):
             new_path = path_val + ";" + folder_path + ";" if path_val else folder_path + ";"
             winreg.SetValueEx(key, "Path", 0, winreg.REG_EXPAND_SZ, new_path)
             print(f"Added {folder_path} to User PATH.")
-            # Verify
-            # Broadcast change? (Usually requires restart or ctypes call, checking local session only here)
         else:
             print(f"{folder_path} is already in PATH.")
             
@@ -39,7 +36,6 @@ def add_to_path(folder_path):
 def install():
     print("Installing ShellLite...")
     
-    # Target Dir
     appdata = os.environ.get('LOCALAPPDATA', os.path.expanduser('~\\AppData\\Local'))
     install_dir = Path(appdata) / "ShellLite"
     bin_path = install_dir / "shl.exe"
@@ -47,8 +43,6 @@ def install():
     if not install_dir.exists():
         install_dir.mkdir(parents=True)
         
-    # Source exe
-    # If running from PyInstaller bundle
     if getattr(sys, 'frozen', False):
         base_path = sys._MEIPASS
     else:
@@ -57,7 +51,6 @@ def install():
     source_exe = Path(base_path) / "shl.exe"
     
     if not source_exe.exists():
-        # Fallback to dist if running script directly
         source_exe = Path(base_path) / "dist" / "shl.exe"
     
     if not source_exe.exists():
@@ -71,9 +64,7 @@ def install():
         print("Copy successful.")
     except Exception as e:
         print(f"Error copying file: {e}")
-        # If locked, maybe ask to kill?
         
-    # Add to PATH
     add_to_path(install_dir)
     
     print("\nInstallation Complete!")

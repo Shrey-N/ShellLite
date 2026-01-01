@@ -1,32 +1,20 @@
 
-# 1. Colors and Styles
 say in red "This should be RED"
 say bold green "This should be BOLD GREEN"
 say in blue "This is BLUE"
 
-# 2. JSON Conversion
 data = { "id": 1, "name": "ShellLite" }
 json_str = convert data to json
 say "JSON Output: " + json_str
 
-# Test reverse? (Not strictly required by prompt but good to have)
-# parsed = convert json_str to json # Parsing logic ambiguous in implementation, but used explicitly for str inputs?
-# say parsed["name"]
 
-# 3. Progress Bar
 say "Starting Progress..."
 show progress for i in range 1 20
    wait 0.1
 
 say "Progress Complete!"
 
-# 4. Scheduling (IN X Seconds)
 say "Waiting for 2 seconds..."
 in 2 seconds
    say "This message appears after 2 seconds!"
 
-# 5. Web Server (Syntax Check via Eval)
-# We won't run this as it blocks
-# on request to "/hello"
-#     give "Hello World"
-# listen on port 8080

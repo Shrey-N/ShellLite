@@ -3,10 +3,12 @@ from dataclasses import dataclass
 from typing import List, Optional
 
 @dataclass
+@dataclass
 class Token:
     type: str
     value: str
     line: int
+    column: int = 1
 
 class Lexer:
     def __init__(self, source_code: str):
@@ -24,28 +26,34 @@ class Lexer:
             self.line_number = line_num
             stripped_line = line.strip()
             
-            if not stripped_line or stripped_line.startswith('#'):
+            if not stripped_line:
+                continue
+                
+            indent_level = len(line) - len(line.lstrip())
+            
+            if stripped_line.startswith('#'):
+                self.tokens.append(Token('COMMENT', stripped_line, self.line_number, indent_level + 1))
+                self.tokens.append(Token('NEWLINE', '', self.line_number, len(line) + 1))
                 continue
 
-            indent_level = len(line) - len(line.lstrip())
             if indent_level > self.indent_stack[-1]:
                 self.indent_stack.append(indent_level)
-                self.tokens.append(Token('INDENT', '', self.line_number))
+                self.tokens.append(Token('INDENT', '', self.line_number, indent_level + 1))
             elif indent_level < self.indent_stack[-1]:
                 while indent_level < self.indent_stack[-1]:
                     self.indent_stack.pop()
-                    self.tokens.append(Token('DEDENT', '', self.line_number))
+                    self.tokens.append(Token('DEDENT', '', self.line_number, indent_level + 1))
                 if indent_level != self.indent_stack[-1]:
                     raise IndentationError(f"Unindent does not match any outer indentation level on line {self.line_number}")
 
-            self.tokenize_line(stripped_line)
-            self.tokens.append(Token('NEWLINE', '', self.line_number))
+            self.tokenize_line(stripped_line, indent_level + 1)
+            self.tokens.append(Token('NEWLINE', '', self.line_number, len(line) + 1))
 
         while len(self.indent_stack) > 1:
             self.indent_stack.pop()
-            self.tokens.append(Token('DEDENT', '', self.line_number))
+            self.tokens.append(Token('DEDENT', '', self.line_number, 1))
             
-        self.tokens.append(Token('EOF', '', self.line_number))
+        self.tokens.append(Token('EOF', '', self.line_number, 1))
         return self.tokens
 
     def _remove_multiline_comments(self, source: str) -> str:
@@ -64,13 +72,15 @@ class Lexer:
                 i += 1
         return ''.join(result)
 
-    def tokenize_line(self, line: str):
+    def tokenize_line(self, line: str, start_col: int = 1):
         pos = 0
         while pos < len(line):
             match = None
+            current_col = start_col + pos
             
 
             if line[pos] == '#':
+                self.tokens.append(Token('COMMENT', line[pos:], self.line_number, current_col))
                 break
             
             if line[pos].isspace():
@@ -81,38 +91,12 @@ class Lexer:
                 match = re.match(r'^\d+(\.\d+)?', line[pos:])
                 if match:
                     value = match.group(0)
-                    self.tokens.append(Token('NUMBER', value, self.line_number))
+                    self.tokens.append(Token('NUMBER', value, self.line_number, current_col))
                     pos += len(value)
                     continue
 
-            # Check for Triple Quotes first
             if line[pos:pos+3] in ('"""', "'''"):
                  quote_char = line[pos:pos+3]
-                 # For multiline, we need to scan ahead across lines?
-                 # Lexer tokenizes line by line.
-                 # If we want multiline strings, we need to look ahead in lines or store state.
-                 # Current Lexer iterates lines.
-                 # We can switch to "in_multiline_string" state?
-                 # Or we can consume remaining lines here?
-                 # Since tokenize() loop iterates lines, we can't easily consume from 'lines' list inside tokenize_line.
-                 # But we can raise SyntaxError or support it limited to one line (useless).
-                 
-                 # Simpler logic: Lexer state machine.
-                 # But refactoring tokenize() loop is risky.
-                 
-                 # Alternative: "css" tag takes a BLOCK?
-                 # css:
-                 #    ... content ...
-                 # But css takes expression.
-                 
-                 # Let's support triple quotes ONLY if they end on same line? No.
-                 # Let's change website/main.shl to use single line strings concatenated?
-                 # Or use a separate file for CSS? serve static is already there.
-                 # I used get_styles() returning css string.
-                 
-                 # User asked for "CSS Bundling: A way to define styles directly".
-                 # I'll stick to single quotes for now to save time and reliability.
-                 # I'll update website/main.shl to use "string" + "string".
                  pass
 
             if line[pos] in ('"', "'"):
@@ -121,14 +105,13 @@ class Lexer:
                 if end_quote == -1:
                     raise SyntaxError(f"Unterminated string on line {self.line_number}")
                 value = line[pos+1:end_quote]
-                # Simple escape handling
                 value = value.replace("\\n", "\n").replace("\\t", "\t").replace("\\r", "\r").replace("\\\"", "\"").replace("\\\'", "\'")
-                self.tokens.append(Token('STRING', value, self.line_number))
+                self.tokens.append(Token('STRING', value, self.line_number, current_col))
                 pos = end_quote + 1
                 continue
 
             if line[pos:pos+3] == '...':
-                self.tokens.append(Token('DOTDOTDOT', '...', self.line_number))
+                self.tokens.append(Token('DOTDOTDOT', '...', self.line_number, current_col))
                 pos += 3
                 continue
 
@@ -140,62 +123,52 @@ class Lexer:
                 '%=': 'MODEQ'
             }
             if two_char in two_char_tokens:
-                self.tokens.append(Token(two_char_tokens[two_char], two_char, self.line_number))
+                self.tokens.append(Token(two_char_tokens[two_char], two_char, self.line_number, current_col))
                 pos += 2
                 continue
             
             char = line[pos]
 
-            # Natural Language Comparisons: 'is at least', 'is exactly', 'is less than', 'is more than'
-            # We check this before single chars to catch 'is' phrases.
-            # Using simple Lookahead
             rest_of_line = line[pos:]
             
             if rest_of_line.startswith('is at least '):
-                self.tokens.append(Token('GE', '>=', self.line_number))
+                self.tokens.append(Token('GE', '>=', self.line_number, current_col))
                 pos += 12 # len('is at least ')
                 continue
             elif rest_of_line.startswith('is exactly '):
-                self.tokens.append(Token('EQ', '==', self.line_number))
+                self.tokens.append(Token('EQ', '==', self.line_number, current_col))
                 pos += 11
                 continue
             elif rest_of_line.startswith('is less than '):
-                self.tokens.append(Token('LT', '<', self.line_number))
+                self.tokens.append(Token('LT', '<', self.line_number, current_col))
                 pos += 13
                 continue
             elif rest_of_line.startswith('is more than '):
-                self.tokens.append(Token('GT', '>', self.line_number))
+                self.tokens.append(Token('GT', '>', self.line_number, current_col))
                 pos += 13
                 continue
 
-            # Filler Words: 'the'
-            # Check if next chars are 'the' plus a non-alphanum bound (e.g. space, newline, symbol)
             if rest_of_line.startswith('the') and (len(rest_of_line) == 3 or not rest_of_line[3].isalnum()):
-                 # Only skip if it's a standalone word 'the'
                  pos += 3
                  continue
 
             if char == '/':
-                # Check for Regex /regex/
-                # We assume regex if the PREVIOUS token is not something that implies division (Number, ID, RBracket, RParen)
                 last_type = self.tokens[-1].type if self.tokens else None
                 is_division = False
                 if last_type in ('NUMBER', 'STRING', 'ID', 'RPAREN', 'RBRACKET'):
                      is_division = True
                 
                 if not is_division:
-                    # Parse Regex
                     end_slash = line.find('/', pos + 1)
                     if end_slash != -1:
                         pattern = line[pos+1:end_slash]
-                        # Check for flags after slash
                         flags = ""
                         k = end_slash + 1
                         while k < len(line) and line[k].isalpha():
                             flags += line[k]
                             k += 1
                         
-                        self.tokens.append(Token('REGEX', pattern, self.line_number))
+                        self.tokens.append(Token('REGEX', pattern, self.line_number, current_col))
                         pos = k
                         continue
 
@@ -207,7 +180,7 @@ class Lexer:
                 '{': 'LBRACE', '}': 'RBRACE', ',': 'COMMA', '.': 'DOT'
             }
             if char in single_char_tokens:
-                self.tokens.append(Token(single_char_tokens[char], char, self.line_number))
+                self.tokens.append(Token(single_char_tokens[char], char, self.line_number, current_col))
                 pos += 1
                 continue
 
@@ -265,12 +238,8 @@ class Lexer:
                         'yellow': 'YELLOW', 'cyan': 'CYAN', 'magenta': 'MAGENTA',
                         'serve': 'SERVE', 'static': 'STATIC',
                         
-                        # === NATURAL ENGLISH WEB DSL ===
-                        # Routing
-                        # File System Mastery (v0.03.3)
                         'write': 'WRITE', 'append': 'APPEND', 'read': 'READ', 'file': 'FILE',
                         
-                        # File System Mastery (v0.03.3)
                         'write': 'WRITE', 'append': 'APPEND', 'read': 'READ', 'file': 'FILE',
                         'db': 'DB', 'database': 'DB',
                         'query': 'QUERY', 'open': 'OPEN', 'close': 'CLOSE', 'exec': 'EXEC',
@@ -281,32 +250,27 @@ class Lexer:
                         'submits': 'SUBMITS', 'start': 'START', 'server': 'SERVER',
                         'files': 'FILES',
                         
-                        # Page/Component creation
                         'define': 'DEFINE', 'page': 'PAGE', 'called': 'CALLED',
                         'using': 'USING', 'component': 'PAGE',
                         
-                        # HTML aliases (natural names)
                         'heading': 'HEADING', 'paragraph': 'PARAGRAPH',
-                        # 'link' removed - conflicts with HTML <link> tag
                         'image': 'IMAGE',
                         
-                        # List operations  
                         'add': 'ADD', 'put': 'ADD', 'into': 'INTO',
                         'count': 'COUNT', 'many': 'MANY', 'how': 'HOW',
                         
-                        # Forms
                         'field': 'FIELD', 'submit': 'SUBMIT', 'named': 'NAMED',
                         'placeholder': 'PLACEHOLDER',
                     }
                     token_type = keywords.get(value, 'ID')
-                    self.tokens.append(Token(token_type, value, self.line_number))
+                    self.tokens.append(Token(token_type, value, self.line_number, current_col))
                     pos += len(value)
                     continue
             
 
             
             if char in single_char_tokens:
-                self.tokens.append(Token(single_char_tokens[char], char, self.line_number))
+                self.tokens.append(Token(single_char_tokens[char], char, self.line_number, current_col))
                 pos += 1
                 continue
 

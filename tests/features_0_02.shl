@@ -1,7 +1,6 @@
 
 say "--- Testing ShellLite v0.02 Features ---"
 
-# 1. Regex
 say "\n1. Regex"
 email = "test@example.com"
 if email matches /^[a-z]+@[a-z]+\.[a-z]+$/
@@ -9,7 +8,6 @@ if email matches /^[a-z]+@[a-z]+\.[a-z]+$/
 else
     say "Regex Match Failed!"
 
-# 2. Sets
 say "\n2. Sets"
 myset = Set([1, 2, 2, 3])
 say "Set: " + myset
@@ -18,13 +16,11 @@ say "Set after add: " + myset
 if myset.__contains__(4) # native method check
     say "Set contains 4"
 
-# 3. String Interpolation
 say "\n3. Interpolation"
 name = "World"
 val = 10
 say "Hello {name}, 10+10 is {10+10}"
 
-# 4. Async
 say "\n4. Async"
 to slow_task n
     sleep n
@@ -36,7 +32,6 @@ say "Doing checking in main thread..."
 res = await task
 say "Async Result: " + res
 
-# 5. Type Hints
 say "\n5. Types"
 to add_int a:int b:int
     give a + b
@@ -53,8 +48,6 @@ try
 catch e
     say "Type check Caught: " + e
 
-# 6. GUI (Interactive)
 say "\n6. GUI"
-# confirm "Testing GUI?" # Uncomment to test interactively
 
 say "\n--- Test Complete ---"

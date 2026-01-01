@@ -14,7 +14,6 @@ if (-not (Test-Path $InstallDir)) {
 Copy-Item $ExePath -Destination $InstallDir -Force
 Write-Host "ShellLite binary copied."
 
-# Add to User PATH
 $UserPath = [Environment]::GetEnvironmentVariable("Path", "User")
 if ($UserPath -notlike "*$InstallDir*") {
     Write-Host "Adding $InstallDir to User PATH..."

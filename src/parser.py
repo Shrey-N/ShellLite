@@ -5,7 +5,7 @@ import re
 
 class Parser:
     def __init__(self, tokens: List[Token]):
-        self.tokens = tokens
+        self.tokens = [t for t in tokens if t.type != 'COMMENT']
         self.pos = 0
 
     def peek(self, offset: int = 0) -> Token:
@@ -26,7 +26,6 @@ class Parser:
     def parse(self) -> List[Node]:
         statements = []
         while not self.check('EOF'):
-            # Skip newlines at the top level between statements
             while self.check('NEWLINE'):
                 self.consume()
                 if self.check('EOF'): break
@@ -87,38 +86,23 @@ class Parser:
         elif self.check('MAKE'):
             return self.parse_make()
         elif self.check('INPUT'):
-            # Check if this is 'input type="..."' i.e. HTML tag
             next_t = self.peek(1)
             if next_t.type in ('ID', 'TYPE', 'STRING', 'NAME', 'VALUE', 'CLASS', 'STYLE', 'ONCLICK', 'SRC', 'HREF', 'ACTION', 'METHOD'):
-                # Treat as HTML tag function call - use parse_id_start_statement with token passed
                 input_token = self.consume()
                 return self.parse_id_start_statement(passed_name_token=input_token)
-            # Else fallthrough to expression
             return self.parse_expression_stmt()
         elif self.check('ID'):
             return self.parse_id_start_statement()
         elif self.check('SPAWN'):
-             # Support spawn as a statement (ignore return value)
-             # e.g. spawn my_func()
              expr = self.parse_expression()
              self.consume('NEWLINE')
              return Print(expr) # Hack: Wrap in Print to execute? No, just expression stmt
-             # Actually parse_expression_stmt handles this if we fall through
-             # But here we caught check('SPAWN'), so we must handle it or let fallthrough?
-             # check('ID') is above. SPAWN is a keyword.
-             # So we must handle it explicitly or remove this block and let 'else' handle parse_expression_stmt.
-             # BUT parse_expression_stmt calls parse_expression.
-             # Does parse_expression handle SPAWN at top level?
-             # Yes if added to parse_factor/parse_expression.
-             # So we can remove this block if SPAWN starts an expression.
              pass
         elif self.check('WAIT'):
             return self.parse_wait()
         elif self.check('EVERY'):
             return self.parse_every()
         elif self.check('IN'):
-             # "In 10 minutes" - Check if it looks like a time duration start
-             # If just 'IN' and we are at statement level, likely 'After'
              return self.parse_after()
         elif self.check('LISTEN'):
             return self.parse_listen()
@@ -129,7 +113,6 @@ class Parser:
         elif self.check('COMPRESS') or self.check('EXTRACT'):
              return self.parse_archive()
         elif self.check('LOAD') or self.check('SAVE'):
-             # Check if it's CSV? "load csv" or "save x to csv"
              if self.check('LOAD') and self.peek(1).type == 'CSV':
                  return self.parse_csv_load()
              if self.check('SAVE'):
@@ -147,7 +130,6 @@ class Parser:
              return self.parse_automation()
         elif self.check('BEFORE'):
              return self.parse_middleware()
-        # === NATURAL ENGLISH WEB DSL ===
         elif self.check('DEFINE'):
             return self.parse_define_page()
         elif self.check('ADD'):
@@ -188,7 +170,6 @@ class Parser:
         token = self.consume('ON')
         
         if self.check('REQUEST') or (self.check('ID') and self.peek().value == 'request'):
-            # on request to "/path"
             self.consume()
             if self.check('TO'): self.consume('TO')
             
@@ -262,24 +243,18 @@ class Parser:
         """Parse: wait for 2 seconds (or just wait 2)"""
         token = self.consume('WAIT')
         
-        # Optional 'for'
-        # 'for' is a keyword FOR
         if self.check('FOR'):
             self.consume('FOR')
             
         time_expr = self.parse_expression()
         
-        # Optional 'seconds' or 'second' filler
         if self.check('SECOND'):
             self.consume()
         
         self.consume('NEWLINE')
         
-        # Return as a Call to 'wait' builtin
-        # Standard Call node: Call(func_name, args)
         return Call('wait', [time_expr])
 
-    # --- New English-like statement parsers ---
     
     def parse_stop(self) -> Stop:
         """Parse: stop"""
@@ -410,14 +385,11 @@ class Parser:
         """Parse: repeat 5 times (body) or repeat (body)"""
         token = self.consume('REPEAT')
         
-        # Check if there's a count
         if self.check('NEWLINE'):
-            # Infinite loop style - but we'll require a count
             raise SyntaxError(f"repeat requires a count on line {token.line}")
         
         count = self.parse_expression()
         
-        # Optional 'times' keyword
         if self.check('TIMES'):
             self.consume('TIMES')
         
@@ -447,7 +419,6 @@ class Parser:
         elif self.check('EXEC'): op = 'exec'; self.consume()
         elif self.check('CLOSE'): op = 'close'; self.consume()
         else:
-             # Maybe db "path" -> open?
              if self.check('STRING'):
                  op = 'open'
              else:
@@ -456,24 +427,15 @@ class Parser:
         args = []
         if op != 'close' and not self.check('NEWLINE'):
              args.append(self.parse_expression())
-             # Support multiple args? e.g. db exec "sql" [params]
              while not self.check('NEWLINE'):
                  args.append(self.parse_expression())
                  
-        # self.consume('NEWLINE') # Don't consume newline, let caller do it
         node = DatabaseOp(op, args)
         node.line = token.line
         return node
 
     def parse_middleware(self) -> Node:
         """Parse: before request ..."""
-        # We reuse OnRequest node? No, usually distinct.
-        # But for now, let's treat it as a special OnRequest with pattern "*"
-        # NO, user wants 'before request' syntax.
-        # Let's add Middleware AST? Or reuse OnRequest?
-        # Reusing OnRequest with path="MIDDLEWARE" might be confusing.
-        # But 'before request' is essentially 'on request' that runs first.
-        # Let's map it to OnRequest(path='__middleware__', body)
         token = self.consume('BEFORE')
         self.consume('REQUEST')
         self.consume('NEWLINE')
@@ -492,7 +454,6 @@ class Parser:
         """Parse: when value is x => (body) ... OR when condition (body) OR when someone visits/submits"""
         token = self.consume('WHEN')
         
-        # Check for natural routing: when someone visits/submits "path"
         if self.check('SOMEONE'):
             self.consume('SOMEONE')
             if self.check('VISITS'):
@@ -530,13 +491,10 @@ class Parser:
         self.consume('NEWLINE')
         self.consume('INDENT')
         
-        # Check first statement in block to decide if Switch or If
         if self.check('IS'):
-             # It's a Switch Statement
             cases = []
             otherwise = None
             
-            # Loop for Switch cases
             while not self.check('DEDENT') and not self.check('EOF'):
                 if self.check('IS'):
                     self.consume('IS')
@@ -575,7 +533,6 @@ class Parser:
             return node
             
         else:
-            # It's an IF statement (when condition -> body)
             body = []
             while not self.check('DEDENT') and not self.check('EOF'):
                 while self.check('NEWLINE'): self.consume()
@@ -584,7 +541,6 @@ class Parser:
             
             self.consume('DEDENT')
             
-            # Allow else/elif for 'when' too?
             else_body = None
             if self.check('ELSE'):
                 self.consume('ELSE')
@@ -614,14 +570,11 @@ class Parser:
         name = self.consume('ID').value
         
         args = []
-        # Syntax: to greet name OR to greet name:string
         while self.check('ID'):
             arg_name = self.consume('ID').value
             type_hint = None
             
-            # Check for Type Hint or Trailing Colon
             if self.check('COLON'):
-                # If next is newline, it's a trailing colon (end of def)
                 if self.peek(1).type == 'NEWLINE':
                     pass 
                 else:
@@ -718,7 +671,6 @@ class Parser:
             self.consume('PLUSEQ')
             value = self.parse_expression()
             self.consume('NEWLINE')
-            # Desugar a += 1 to a = a + 1
             node = Assign(name, BinOp(VarAccess(name), '+', value))
             node.line = name_token.line
             return node
@@ -750,7 +702,6 @@ class Parser:
         elif self.check('IS'):
             token_is = self.consume('IS')
             
-            # Natural English initialization: tasks is a list
             if self.check('ID') and self.peek().value == 'a':
                 self.consume()
                 
@@ -779,7 +730,6 @@ class Parser:
                 node.line = token_is.line
                 return node
             else:
-                # Support: name is "Alice" or data is {"x": 1}
                 value = self.parse_expression()
                 self.consume('NEWLINE')
                 node = Assign(name, value)
@@ -787,11 +737,9 @@ class Parser:
                 return node
             
         elif self.check('DOT'):
-            # Method call or property access (or assignment)
             self.consume('DOT')
             member_token = self.consume()
             member = member_token.value
-            # Warning: we accept ANY token as member if it follows DOT to allow keywords like 'json', 'open' etc.
             
             if self.check('ASSIGN'):
                 self.consume('ASSIGN')
@@ -812,11 +760,8 @@ class Parser:
             if not self.check('NEWLINE') and not self.check('EOF') and not self.check('EQ') and not self.check('IS'):
                 args = []
                 while not self.check('NEWLINE') and not self.check('EOF') and not self.check('IS'): 
-                     # Check for named arg: KEYWORD/ID = Expr
-                     # Support HTML attributes like class=..., type=..., for=...
                      is_named_arg = False
                      if self.peek(1).type == 'ASSIGN':
-                         # Acceptable keys
                          t_type = self.peek().type
                          if t_type in ('ID', 'STRUCTURE', 'TYPE', 'FOR', 'IN', 'WHILE', 'IF', 'ELSE', 'FROM', 'TO', 'STRING', 'EXTENDS', 'WITH', 'PLACEHOLDER', 'NAME', 'VALUE', 'ACTION', 'METHOD', 'HREF', 'SRC', 'CLASS', 'STYLE'):
                              is_named_arg = True
@@ -826,8 +771,6 @@ class Parser:
                          key = key_token.value
                          self.consume('ASSIGN')
                          val = self.parse_expression()
-                         # Pass as a dictionary node {key: val}
-                         # Since Interpreter _make_tag_fn handles dicts as attrs
                          args.append(Dictionary([ (String(key), val) ]))
                      else:
                          if self.check('USING'):
@@ -841,9 +784,6 @@ class Parser:
                 else:
                     self.consume('NEWLINE')
                 
-                # Check for Block Call (WebDSL style)
-                # div class="x"
-                #     p "hello"
                 body = None
                 if self.check('INDENT'):
                     self.consume('INDENT')
@@ -869,9 +809,6 @@ class Parser:
             else:
                  self.consume('NEWLINE')
 
-            # Standalone variable/identifier -> Just access it (via Call with 0 args to check for Block)
-            # OR could be VarAccess.
-            # But if it has a BLOCK, it MUST be a call (e.g. div \n ...)
             
             if self.check('INDENT'):
                 self.consume('INDENT')
@@ -882,12 +819,10 @@ class Parser:
                     body.append(self.parse_statement())
                 self.consume('DEDENT')
                 
-                # Treat as Call(name, [], body)
                 node = Call(name, [], body)
                 node.line = name_token.line
                 return node
             
-            # Just access
             node = VarAccess(name)
             node.line = name_token.line
             return node
@@ -897,20 +832,17 @@ class Parser:
         else:
             token = self.consume('SAY')
             
-        # Check for 'show progress'
         if self.check('PROGRESS'):
             return self.parse_progress_loop(token)
             
         style = None
         color = None
         
-        # Handle 'say in red "..."'
         if self.check('IN'):
             self.consume('IN')
             if self.peek().type in ('RED', 'GREEN', 'BLUE', 'YELLOW', 'CYAN', 'MAGENTA'):
                 color = self.consume().value
         
-        # Handle 'say bold green "..."'
         if self.check('BOLD'):
             self.consume('BOLD')
             style = 'bold'
@@ -928,8 +860,6 @@ class Parser:
         """Parse: show progress for i in ..."""
         self.consume('PROGRESS')
         
-        # Expect a loop like 'for ...' or 'repeat ...'
-        # But 'for' parser expects to be called when current token is 'FOR'
         if not (self.check('FOR') or self.check('REPEAT') or self.check('LOOP')):
              raise SyntaxError(f"Expected loop after 'show progress' on line {start_token.line}")
              
@@ -946,13 +876,11 @@ class Parser:
         """Parse: serve static 'folder' at 'url' OR serve files from 'folder'"""
         token = self.consume('SERVE')
         
-        # Natural syntax: serve files from "public"
         if self.check('FILES'):
             self.consume('FILES')
             if self.check('FROM'):
                 self.consume('FROM')
             folder = self.parse_expression()
-            # Default URL is /static
             url = String('/static')
             if self.check('AT'):
                 self.consume('AT')
@@ -964,7 +892,6 @@ class Parser:
             node.line = token.line
             return node
         
-        # Original syntax: serve static "folder" at "/url"
         self.consume('STATIC')
         folder = self.parse_expression()
         self.consume('AT')
@@ -1042,7 +969,6 @@ class Parser:
         node.line = token.line
         return node
 
-    # === NATURAL ENGLISH WEB DSL PARSERS ===
     
     def parse_define_page(self) -> Node:
         """Parse: define page Name (using args) = body"""
@@ -1052,7 +978,6 @@ class Parser:
         
         name = self.consume('ID').value
         
-        # Check for arguments: define page TaskList using items
         args = []
         if self.check('USING'):
             self.consume('USING')
@@ -1071,7 +996,6 @@ class Parser:
             body.append(self.parse_statement())
         self.consume('DEDENT')
         
-        # Create a FunctionDef node (reuse existing infrastructure)
         node = FunctionDef(name, args, body)
         node.line = token.line
         return node
@@ -1087,7 +1011,6 @@ class Parser:
         list_name = self.consume('ID').value
         self.consume('NEWLINE')
         
-        # Generate: list = list + [item]
         list_access = VarAccess(list_name)
         item_list = ListVal([item_expr])
         concat = BinOp(list_access, '+', item_list)
@@ -1101,7 +1024,6 @@ class Parser:
         if self.check('SERVER'):
             self.consume('SERVER')
         
-        # Default port 8080
         port = Number(8080)
         
         if self.check('ON'):
@@ -1122,7 +1044,6 @@ class Parser:
         text = self.parse_expression()
         self.consume('NEWLINE')
         
-        # Create a Call node for 'h1' builtin
         node = Call('h1', [text])
         node.line = token.line
         return node
@@ -1133,7 +1054,6 @@ class Parser:
         text = self.parse_expression()
         self.consume('NEWLINE')
         
-        # Create a Call node for 'p' builtin
         node = Call('p', [text])
         node.line = token.line
         return node
@@ -1177,16 +1097,8 @@ class Parser:
         
         else_body = None
         
-        # Handle ELIF (as recursive If in else_body? Or flat? Let's use recursive for simplicity with AST)
-        # AST is If(cond, body, else_body).
-        # ELIF cond body -> else_body = [If(cond, body, ...)]
         
         if self.check('ELIF'):
-            # This 'elif' becomes the 'if' of the else_body
-            # But wait, 'elif' token needs to be consumed inside the recursive call?
-            # Or we recursively call parse_if but trick it?
-            # Better: Rewrite parse_if to NOT consume IF if called recursively?
-            # No, standard way:
             else_body = [self.parse_elif()]
             
         elif self.check('ELSE'):
@@ -1203,7 +1115,6 @@ class Parser:
         return If(condition, body, else_body)
 
     def parse_elif(self) -> If:
-        # Similar to parse_if but consumes ELIF
         token = self.consume('ELIF')
         condition = self.parse_expression()
         self.consume('NEWLINE')
@@ -1277,7 +1188,6 @@ class Parser:
             catch_body.append(self.parse_statement())
         self.consume('DEDENT')
         
-        # Check for always block (finally)
         always_body = []
         if self.check('ALWAYS'):
             self.consume('ALWAYS')
@@ -1303,31 +1213,26 @@ class Parser:
             while self.check('NEWLINE') or self.check('INDENT') or self.check('DEDENT'):
                 self.consume()
         skip_formatted()
-        # Empty list
         if self.check('RBRACKET'):
             self.consume('RBRACKET')
             node = ListVal([])
             node.line = token.line
             return node
         
-        # Check for spread operator
         if self.check('DOTDOTDOT'):
              node = self._parse_list_with_spread(token)
              skip_formatted()
              return node
         
-        # Parse first expression
         first_expr = self.parse_expression()
         skip_formatted()
         
-        # Check for list comprehension: [expr for var in iterable]
         if self.check('FOR'):
             self.consume('FOR')
             var_name = self.consume('ID').value
             self.consume('IN')
             iterable = self.parse_expression()
             
-            # Optional condition: [x for x in list if x > 0]
             condition = None
             if self.check('IF'):
                 self.consume('IF')
@@ -1338,7 +1243,6 @@ class Parser:
             node.line = token.line
             return node
         
-        # Regular list
         elements = [first_expr]
         while self.check('COMMA'):
             self.consume('COMMA')
@@ -1398,7 +1302,6 @@ class Parser:
         skip_formatted()
         pairs = []
         if not self.check('RBRACE'):
-            # Support { key: value } or { "key": value } or { expr: value }
             if self.check('ID') and self.peek(1).type == 'COLON':
                 key_token = self.consume('ID')
                 key = String(key_token.value)
@@ -1464,22 +1367,16 @@ class Parser:
                         expr = String(part)
                         expr.line = token.line
                     else:
-                        # Full expression support via re-parsing
                         snippet = part.strip()
                         if snippet:
                             sub_lexer = Lexer(snippet)
-                            # Remove comments/indent processing if any? Expressions are usually simple.
                             sub_tokens = sub_lexer.tokenize() 
-                            # Tokenize adds EOF. Parser expects list of tokens.
                             
                             sub_parser = Parser(sub_tokens)
-                            # We want a single expression.
-                            # But parse_expression might fail if tokens are empty/weird.
                             try:
                                 expr = sub_parser.parse_expression()
                                 expr.line = token.line
                             except Exception as e:
-                                # Fallback or error?
                                 raise SyntaxError(f"Invalid interpolation expression: '{snippet}' on line {token.line}")
                         else:
                             continue
@@ -1509,7 +1406,6 @@ class Parser:
             return self.parse_dict()
         elif token.type == 'ID':
             self.consume()
-            # Dont check for args here, just VarAccess or Dot
             if self.check('DOT'):
                 self.consume('DOT')
                 prop_token = self.consume()
@@ -1526,7 +1422,6 @@ class Parser:
             self.consume('RPAREN')
             return expr
         elif token.type == 'INPUT' or token.type == 'ASK':
-            # Check if this is 'input type="..."' i.e. HTML tag
             is_tag = False
             next_t = self.peek(1)
             if next_t.type in ('ID', 'TYPE', 'STRING', 'NAME', 'VALUE', 'CLASS', 'STYLE', 'ONCLICK', 'SRC', 'HREF', 'ACTION', 'METHOD'):
@@ -1562,15 +1457,11 @@ class Parser:
             return node
         elif token.type == 'EXECUTE':
             op = self.consume()
-            # run "cmd" -> convert to function call run("cmd")
-            # Argument is parse_factor or parse_expression? 
-            # run "cmd". parse_expression catches "cmd".
             right = self.parse_expression()
             node = Call('run', [right])
             node.line = op.line
             return node
         elif token.type == 'COUNT' or token.type == 'HOW':
-            # count of x, how many x
             token = self.consume()
             if token.type == 'HOW':
                 self.consume('MANY')
@@ -1589,7 +1480,6 @@ class Parser:
         elif token.type == 'CONVERT':
             return self.parse_convert()
         elif token.type == 'LOAD' and self.peek(1).type == 'CSV':
-             # Handle load csv as expression
              self.consume('LOAD')
              self.consume('CSV')
              path = self.parse_factor() # argument
@@ -1656,20 +1546,16 @@ class Parser:
         elif token.type == 'LBRACE':
             return self.parse_dict()
         elif token.type == 'ID':
-            # Check for Natural Collection Syntax: a list of / a unique set of
             if token.value == 'a':
                 if self.peek(1).type == 'LIST' and self.peek(2).type == 'OF':
-                    # a list of ...
                     return self._parse_natural_list()
                 elif self.peek(1).type == 'UNIQUE' and self.peek(2).type == 'SET' and self.peek(3).type == 'OF':
-                    # a unique set of ...
                     return self._parse_natural_set()
             
             self.consume()
             instance_name = token.value
             method_name = None
             
-            # Check for dot access in expression
             if self.check('DOT'):
                 self.consume('DOT')
                 method_name = self.consume().value
@@ -1713,10 +1599,8 @@ class Parser:
             self.consume('RPAREN')
             return expr
         elif token.type == 'INPUT' or token.type == 'ASK':
-            # Check if this is 'input type="..."' i.e. HTML tag
             next_t = self.peek(1)
             if next_t.type in ('ID', 'TYPE', 'STRING', 'NAME', 'VALUE', 'CLASS', 'STYLE', 'ONCLICK', 'SRC', 'HREF', 'ACTION', 'METHOD'):
-                # Treat as HTML tag function call
                 self.consume() # Consume INPUT token
                 return self.parse_id_start_statement(passed_name_token=token)
             self.consume()
@@ -1742,14 +1626,8 @@ class Parser:
         raise SyntaxError(f"Unexpected token {token.type} at line {token.line}")
 
     def parse_for(self) -> Node:
-        # Support:
-        # 1. for x in list       -> ForIn loop
-        # 2. for i in range 1 10 -> For loop with range
-        # 3. for 20 in range     -> For loop (old style)
-        # 4. loop 20 times       -> For loop
         
         if self.check('LOOP'):
-            # loop N times
             start_token = self.consume('LOOP')
             count_expr = self.parse_expression()
             self.consume('TIMES')
@@ -1768,15 +1646,12 @@ class Parser:
             node.line = start_token.line
             return node
         
-        # for ...
         start_token = self.consume('FOR')
         
-        # Check if it's: for VAR in ITERABLE (where VAR is an ID followed by IN)
         if self.check('ID') and self.peek(1).type == 'IN':
             var_name = self.consume('ID').value
             self.consume('IN')
             
-            # Check if it's range syntax: for i in range 1 10
             if self.check('RANGE'):
                 self.consume('RANGE')
                 start_val = self.parse_expression()
@@ -1793,13 +1668,11 @@ class Parser:
                 
                 self.consume('DEDENT')
                 
-                # Create ForIn with a range call
                 iterable = Call('range', [start_val, end_val])
                 node = ForIn(var_name, iterable, body)
                 node.line = start_token.line
                 return node
             else:
-                # for x in iterable
                 iterable = self.parse_expression()
                 
                 self.consume('NEWLINE')
@@ -1816,7 +1689,6 @@ class Parser:
                 node.line = start_token.line
                 return node
         else:
-            # Old style: for 20 in range (count-based)
             count_expr = self.parse_expression()
             self.consume('IN')
             self.consume('RANGE')
@@ -1836,16 +1708,13 @@ class Parser:
             return node
 
     def parse_expression_stmt(self) -> Node:
-        # Implicit print for top-level expressions
         expr = self.parse_expression()
         self.consume('NEWLINE')
-        # Wrap in Print node for implicit output behavior
         node = Print(expression=expr)
         node.line = expr.line
         return node
 
     def parse_expression(self) -> Node:
-        # Check for lambda: fn x => expr or fn x y => expr
         if self.check('FN'):
             return self.parse_lambda()
         
@@ -1855,7 +1724,6 @@ class Parser:
         token = self.consume('FN')
         params = []
         
-        # Parse parameters until =>
         while self.check('ID'):
             params.append(self.consume('ID').value)
         
@@ -1867,7 +1735,6 @@ class Parser:
         return node
 
     def parse_ternary(self) -> Node:
-        # condition ? true_expr : false_expr
         condition = self.parse_logic_or()
         
         if self.check('QUESTION'):
@@ -1906,8 +1773,6 @@ class Parser:
         return left
 
     def parse_comparison(self) -> Node:
-        # Simple binary operators handling
-        # precedence: ==, !=, <, >, <=, >=, is, matches
         left = self.parse_arithmetic()
         
         if self.peek().type in ('EQ', 'NEQ', 'GT', 'LT', 'GE', 'LE', 'IS', 'MATCHES'):
@@ -1915,7 +1780,6 @@ class Parser:
             op_val = op_token.value
             if op_token.type == 'IS':
                 op_val = '==' # Treat 'is' as equality
-            # matches is kept as matches
                 
             right = self.parse_arithmetic()
             node = BinOp(left, op_val, right)
@@ -1925,7 +1789,6 @@ class Parser:
         return left
 
     def parse_arithmetic(self) -> Node:
-        # precedence: +, -
         left = self.parse_term()
         
         while self.peek().type in ('PLUS', 'MINUS'):
@@ -1938,7 +1801,6 @@ class Parser:
         return left
 
     def parse_term(self) -> Node:
-        # precedence: *, /, %
         left = self.parse_factor()
         
         while self.peek().type in ('MUL', 'DIV', 'MOD'):
@@ -2003,15 +1865,6 @@ class Parser:
         token = self.consume('LOAD')
         self.consume('CSV')
         path = self.parse_expression()
-        # Should we allow assignment here? usually 'users = load csv ...'
-        # Which is an Assign statement.
-        # But parse_assign handles ID = ...
-        # If we have 'users = load csv ...', parse_statement sees ID, goes to parse_id_start...
-        # -> checks ASSIGN -> parse_expression.
-        # So 'load csv' must be parsed as an EXPRESSION if used in assignment.
-        # But here we added it to parse_statement.
-        # If used as statement: `load csv "file"` -> implicitly prints result due to display logic?
-        # We need to add `load` to parse_expression / parse_factor to be usable in assignment.
         self.consume('NEWLINE')
         node = CsvOp('load', None, path)
         node.line = token.line
@@ -2041,9 +1894,6 @@ class Parser:
             node.line = token.line
             return node
         else:
-             # Paste is usually an expression: text = paste from clipboard
-             # If statement: paste from clipboard (useless unless implicit print?)
-             # Let's support statement
              token = self.consume('PASTE')
              self.consume('FROM')
              self.consume('CLIPBOARD')

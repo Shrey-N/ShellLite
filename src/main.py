@@ -8,6 +8,9 @@ import subprocess
 from .lexer import Lexer
 from .parser import Parser
 from .interpreter import Interpreter
+from .ast_nodes import *
+import json
+
 
 def execute_source(source: str, interpreter: Interpreter):
     lines = source.split('\n')
@@ -55,7 +58,6 @@ def run_repl():
             if line.strip() == "exit":
                 break
             
-            # Support line continuation with \
             if line.endswith("\\"):
                 buffer.append(line[:-1])
                 indent_level = 1
@@ -118,7 +120,6 @@ def install_globally():
     target_exe = os.path.join(install_dir, 'shl.exe')
     current_path = sys.executable
     
-    # If not running as EXE (e.g. py script), we can't 'install' the script easily as shl.exe
     is_frozen = getattr(sys, 'frozen', False)
     
     try:
@@ -128,7 +129,6 @@ def install_globally():
             print("Error: Installation requires the shl.exe file.")
             return
 
-        # Add to PATH (User level)
         ps_cmd = f'$oldPath = [Environment]::GetEnvironmentVariable("Path", "User"); if ($oldPath -notlike "*ShellLite*") {{ [Environment]::SetEnvironmentVariable("Path", "$oldPath;{install_dir}", "User") }}'
         subprocess.run(["powershell", "-Command", ps_cmd], capture_output=True)
         
@@ -156,19 +156,16 @@ def install_package(package_name: str):
     user, repo = package_name.split('/')
     print(f"Fetching '{package_name}' from GitHub...")
     
-    # Define modules dir
     home = os.path.expanduser("~")
     modules_dir = os.path.join(home, ".shell_lite", "modules")
     if not os.path.exists(modules_dir):
         os.makedirs(modules_dir)
         
-    # Clean up existing
     target_dir = os.path.join(modules_dir, repo)
     if os.path.exists(target_dir):
         print(f"Removing existing '{repo}'...")
         shutil.rmtree(target_dir)
     
-    # Strategy 1: Download Main Branch ZIP
     zip_url = f"https://github.com/{user}/{repo}/archive/refs/heads/main.zip"
     
     try:
@@ -179,7 +176,6 @@ def install_package(package_name: str):
         with zipfile.ZipFile(io.BytesIO(zip_data)) as z:
             z.extractall(modules_dir)
             
-        # Rename extracted folder (repo-main -> repo)
         extracted_name = f"{repo}-main"
         extracted_path = os.path.join(modules_dir, extracted_name)
         
@@ -192,7 +188,6 @@ def install_package(package_name: str):
         return
 
     except urllib.error.HTTPError:
-        # Strategy 2: Try Master Branch
          zip_url = f"https://github.com/{user}/{repo}/archive/refs/heads/master.zip"
          try:
             print(f"Downloading {zip_url}...")
@@ -202,7 +197,6 @@ def install_package(package_name: str):
             with zipfile.ZipFile(io.BytesIO(zip_data)) as z:
                 z.extractall(modules_dir)
                 
-            # Rename extracted folder (repo-master -> repo)
             extracted_name = f"{repo}-master"
             extracted_path = os.path.join(modules_dir, extracted_name)
             
@@ -257,7 +251,6 @@ def compile_file(filename: str, target: str = 'python'):
         print(f"[SUCCESS] Transpiled to {output_file}")
         
         if target.lower() == 'python':
-            # Optional: Compile to EXE using PyInstaller
             try:
                 import PyInstaller.__main__
                 print("Building Executable with PyInstaller...")
@@ -274,11 +267,133 @@ def compile_file(filename: str, target: str = 'python'):
     except Exception as e:
         print(f"Compilation Failed: {e}")
 
+def lint_file(filename: str):
+    """Parses file and returns JSON errors."""
+    if not os.path.exists(filename):
+        print(json.dumps([{"line": 0, "message": f"File {filename} not found"}]))
+        return
+
+    try:
+        with open(filename, 'r', encoding='utf-8') as f:
+            source = f.read()
+        
+        lexer = Lexer(source)
+        tokens = lexer.tokenize()
+        parser = Parser(tokens)
+        parser.parse()
+        print(json.dumps([]))
+    except Exception as e:
+        line = getattr(e, 'line', 1)
+        print(json.dumps([{
+            "line": line, 
+            "message": str(e)
+        }]))
+
+def resolve_cursor(filename: str, line: int, col: int):
+    """Finds definition/hover info for symbol at line/col (1-based)."""
+    try:
+        with open(filename, 'r', encoding='utf-8') as f:
+            source = f.read()
+            
+        lexer = Lexer(source)
+        tokens = lexer.tokenize()
+        parser = Parser(tokens)
+        nodes = parser.parse()
+        
+        target_token = None
+        for t in tokens:
+            if t.line == line:
+                if t.column <= col <= t.column + len(t.value):
+                    target_token = t
+                    break
+        
+        if not target_token or target_token.type != 'ID':
+             print(json.dumps({"found": False}))
+             return
+
+        word = target_token.value
+        
+        def find_def(n_list, name):
+            for node in n_list:
+                if isinstance(node, FunctionDef) and node.name == name:
+                    return node, "Function"
+                if isinstance(node, ClassDef) and node.name == name:
+                    return node, "Class"
+                if isinstance(node, Assign) and node.name == name:
+                    return node, "Variable"
+                
+                if isinstance(node, If):
+                     res = find_def(node.body, name)
+                     if res: return res
+            return None, None
+
+        found_node = None
+        found_type = None
+        
+        queue = nodes[:]
+        while queue:
+            n = queue.pop(0)
+            if isinstance(n, FunctionDef):
+                if n.name == word: 
+                    found_node = n
+                    found_type = "Function"
+                    break
+                queue.extend(n.body)
+            elif isinstance(n, ClassDef):
+                if n.name == word:
+                    found_node = n
+                    found_type = "Class"
+                    break
+                queue.extend(n.methods)
+            elif isinstance(n, Assign) and n.name == word:
+                found_node = n
+                found_type = "Variable"
+                break
+            elif isinstance(n, If): queue.extend(n.body)
+            elif isinstance(n, While): queue.extend(n.body)
+            elif isinstance(n, For): queue.extend(n.body)
+        
+        if found_node:
+            print(json.dumps({
+                "found": True,
+                "file": filename,
+                "line": found_node.line,
+                "hover": f"**{found_type}** `{word}`"
+            }))
+        else:
+             print(json.dumps({"found": False}))
+
+    except Exception:
+        print(json.dumps({"found": False}))
+
+
+
+
+def format_file(filename: str):
+    """Formats a ShellLite source file."""
+    if not os.path.exists(filename):
+        print(f"Error: File '{filename}' not found.")
+        return
+    
+    try:
+        with open(filename, 'r', encoding='utf-8') as f:
+            source = f.read()
+            
+        from .formatter import Formatter
+        formatter = Formatter(source)
+        formatted_code = formatter.format()
+        
+        with open(filename, 'w', encoding='utf-8') as f:
+            f.write(formatted_code)
+            
+        print(f"[SUCCESS] Formatted {filename}")
+    except Exception as e:
+        print(f"Formatting failed: {e}")
+
+
 
 def self_install_check():
     """Checks if shl is in PATH, if not, offer to install it."""
-    # Simple check: is shl.exe in a known Global path?
-    # Or just check if 'shl' works in shell
     res = subprocess.run(["where", "shl"], capture_output=True, text=True)
     if "ShellLite" not in res.stdout:
         print("\nShellLite is not installed globally.")
@@ -294,6 +409,9 @@ Usage:
   shl                   Start the interactive REPL
   shl help              Show this help message
   shl compile <file>    Compile a script (Options: --target js)
+  shl fmt <file>        Format a script
+  shl check <file>      Lint a file (JSON output)
+  shl resolve <file> <line> <col>  Resolve symbol (JSON output)
   shl install           Install ShellLite globally to your system PATH
 
 For documentation, visit: https://github.com/Shrey-N/ShellDesk
@@ -325,12 +443,27 @@ def main():
             else:
                  print("Usage: shl get <user/repo>")
         elif cmd == "install":
-            # Install ShellLite itself
             install_globally()
+        elif cmd == "fmt" or cmd == "format":
+            if len(sys.argv) > 2:
+                filename = sys.argv[2]
+                format_file(filename)
+            else:
+                print("Usage: shl fmt <filename>")
+        elif cmd == "check":
+            if len(sys.argv) > 2:
+                filename = sys.argv[2]
+                lint_file(filename)
+        elif cmd == "resolve":
+            if len(sys.argv) > 4:
+                filename = sys.argv[2]
+                line = int(sys.argv[3])
+                col = int(sys.argv[4])
+                resolve_cursor(filename, line, col)
+
         else:
             run_file(sys.argv[1])
     else:
-        # No args - trigger install check, then REPL
         self_install_check()
         run_repl()
 

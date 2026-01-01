@@ -29,20 +29,17 @@ class Compiler:
         for stmt in statements:
             stmt_code = self.visit(stmt)
             
-            # Auto-handle expressions (Implicit Return + WebBuilder add)
             is_expr = isinstance(stmt, (Number, String, Boolean, Regex, ListVal, Dictionary, SetVal, VarAccess, BinOp, UnaryOp, Call, MethodCall, PropertyAccess, IndexAccess, Await))
             is_block_call = isinstance(stmt, Call) and stmt.body
             
             if is_expr and not is_block_call:
                 stmt_code = f"_slang_ret = {stmt_code}\n_web_builder.add_text(_slang_ret)"
             
-            # Indent each line of the statement code
             indented_stmt = "\n".join([f"{self.indent()}{line}" for line in stmt_code.split('\n')])
             code += indented_stmt + "\n"
         return code.rstrip()
 
     def compile(self, statements: List[Node]) -> str:
-        # Preamble
         code = [
             "import sys",
             "import os",
@@ -164,13 +161,11 @@ class Compiler:
             "",
         ]
         
-        # Main Code
         code.append("# --- User Script ---")
         code.append(self.compile_block(statements))
         
         return "\n".join(code)
 
-    # --- Visitor Methods ---
 
     def visit_Number(self, node: Number):
         return str(node.value)
@@ -188,8 +183,6 @@ class Compiler:
         elements = []
         for e in node.elements:
             if isinstance(e, Spread):
-                # Python doesn't support list comprehension spread easily inside list literal in old versions,
-                # but [*a, b] works in newer Python. We'll assume [*visit(e.value)]
                 elements.append(f"*{self.visit(e.value)}")
             else:
                 elements.append(self.visit(e))
@@ -210,39 +203,12 @@ class Compiler:
         return f"{node.name} = {self.visit(node.value)}"
 
     def visit_ConstAssign(self, node: ConstAssign):
-        # Python doesn't support const, treat as assign
         return f"{node.name} = {self.visit(node.value)}"
     
     def visit_PropertyAssign(self, node: PropertyAssign):
-        # obj.prop = val OR obj['prop'] = val
-        # To support both (like interpreter), we'd need a helper.
-        # But let's assume standard object access unless it's a dict.
-        # Interpreter check: "if isinstance(instance, Instance): ... elif dict ..."
-        # Python handles `obj.prop` and `obj['prop']` differently.
-        # Since we mapped `Dictionary` to python `{}` and `Instance` to `Instance` class (which has `data` dict),
-        # we need to be careful.
-        # IF we want compatibility, `Instance` in runtime should support `__getattr__` hooking to `data`.
         
-        # Let's assume user uses `Instance` for classes and `dict` for dicts.
-        # And `PropertyAssign` in ShellLite means `instance.prop = val`.
-        # Code: `instance.data['prop'] = val` if it is an Instance?
-        # Or if we implement `__setattr__` on Instance.
-        # Let's emit `set_property(obj, prop, val)` helper call?
-        # NO, simpler: `node.instance_name`.`property_name` = value?
         
-        # If I want to match Interpreter perfectly:
-        # Interpreter logic: if Instance: inst.data[p]=v. if dict: d[p]=v.
-        # I should provide `slang_set_prop(obj, prop, val)` in runtime and use it.
-        # But that's slow/ugly code.
-        # Let's rely on standard python semantics for now:
-        # Logic: If it looks like a dict, treating it as object `x.y = z` fails in Python.
-        # So I will emit: `setattr(obj, 'prop', val)` ?? No.
         
-        # NOTE: `Instance` in `runtime.py` is `class Instance: ... self.data = {}`.
-        # It does NOT allow `inst.x = 1`. It requires `inst.data['x'] = 1`.
-        # So I MUST use a helper or modify Instance.
-        # I will Modify `Instance` in runtime later to allow attribute access.
-        # For now, I emit `obj.prop = val` and assume `Instance` supports it.
         return f"{node.instance_name}.{node.property_name} = {self.visit(node.value)}"
 
     def visit_BinOp(self, node: BinOp):
@@ -313,7 +279,6 @@ class Compiler:
         return code
 
     def visit_Until(self, node: Until):
-         # until X -> while not X
          code = f"while not ({self.visit(node.condition)}):\n"
          self.indentation += 1
          code += self.compile_block(node.body)
@@ -321,8 +286,6 @@ class Compiler:
          return code
 
     def visit_ProgressLoop(self, node: ProgressLoop):
-        # Desugar progress loop to a python loop with progress bar
-        # We'll use a wrapper if it's a range loop or iterable
         loop = node.loop_node
         if isinstance(loop, (For, Repeat)):
              count_expr = self.visit(loop.count)
@@ -425,7 +388,6 @@ class Compiler:
         
         code = f"def {node.name}({', '.join(args_strs)}):\n"
         
-        # Save and reset indentation for relative block generation
         old_indent = self.indentation
         self.indentation = 1
         
@@ -444,7 +406,6 @@ class Compiler:
         call_expr = f"{node.name}({', '.join(args)})"
         
         if node.body:
-             # Block context for DSL
              var_name = f"_tag_{random.randint(0, 1000000)}"
              code = f"{var_name} = {call_expr}\n"
              code += f"with BuilderContext({var_name}):\n"
@@ -455,7 +416,6 @@ class Compiler:
              self.indentation = old_indent
              
              
-             # Capture result
              code += f"\n_slang_ret = {var_name}" 
              code += f"\n_web_builder.add_text({var_name})"
              return code 
@@ -463,38 +423,25 @@ class Compiler:
         return call_expr
 
     def visit_ClassDef(self, node: ClassDef):
-        # class Name(Parent or Instance):
         parent = node.parent if node.parent else "Instance"
         code = f"class {node.name}({parent}):\n"
         self.indentation += 1
         
-        # Init method to setup properties
         args = ["self"] + node.properties
         assigns = [f"self.{p} = {p}" for p in node.properties]
         if not assigns:
             assigns = ["pass"]
             
         code += f"{self.indent()}def __init__({', '.join(args)}):\n"
-        # Call super? If inheriting, yes.
-        # But we don't know if parent has init args easily without context.
-        # Assumption: simple data classes.
         
-        # Revisit Instance: Instance in runtime expects class_def.
-        # But here we are compiling to Python Classes.
-        # So we don't need `Instance` wrapper! We make real classes!
-        # `class Robot:` .... `r = Robot()`.
-        # This is much better.
         
         self.indentation += 1
         for assign in assigns:
             code += f"{self.indent()}{assign}\n"
         self.indentation -= 1
         
-        # Methods
         for method in node.methods:
-            # Need to add 'self' to args
             old_args = method.args
-            # We construct a new node or just simulate visiting
             m_args = ["self"]
             for arg_name, default_node, type_hint in method.args:
                 if default_node:
@@ -512,7 +459,6 @@ class Compiler:
 
     def visit_Instantiation(self, node: Instantiation):
         args = [self.visit(a) for a in node.args]
-        # var = Class(args)
         return f"{node.var_name} = {node.class_name}({', '.join(args)})"
 
     def visit_Make(self, node: Make):
@@ -527,16 +473,9 @@ class Compiler:
         return f"{node.instance_name}.{node.property_name}"
 
     def visit_Import(self, node: Import):
-        # module imports
         if node.path in ('math', 'time', 'http', 'env', 'args', 'path', 're'):
-             # We rely on STD_MODULES wrapper being present via runtime preamble
              return f"{node.path} = STD_MODULES['{node.path}']"
         else:
-             # File import?
-             # `import foo` from foo.py?
-             # Or compile that file too and import?
-             # For now: `exec(slang_read('{node.path}'))` ?? NO, that's interpreting.
-             # Python Imports: `import x`
              base = os.path.basename(node.path).replace('.shl', '').replace('.py', '')
              return f"import {base}"
 
@@ -586,25 +525,19 @@ class Compiler:
         return f"sys.exit({code})"
 
     def visit_ListComprehension(self, node: ListComprehension):
-        # [expr for var in iterable if cond]
         iter_str = self.visit(node.iterable)
         expr_str = self.visit(node.expr)
         cond_str = f" if {self.visit(node.condition)}" if node.condition else ""
         return f"[{expr_str} for {node.var_name} in {iter_str}{cond_str}]"
         
     def visit_Lambda(self, node: Lambda):
-        # lambda p1, p2: expr
         return f"lambda {', '.join(node.params)}: {self.visit(node.body)}"
         
     def visit_Ternary(self, node: Ternary):
         return f"({self.visit(node.true_expr)} if {self.visit(node.condition)} else {self.visit(node.false_expr)})"
 
-    # --- System / Threads --- 
     
     def visit_Spawn(self, node: Spawn):
-        # _executor.submit(func, *args)
-        # Call node is call(name, args).
-        # We need to construct: submit(name, *args)
         if isinstance(node.call, Call):
             args = [self.visit(a) for a in node.call.args]
             return f"_executor.submit({node.call.name}, {', '.join(args)})"
@@ -613,12 +546,8 @@ class Compiler:
     def visit_Await(self, node: Await):
         return f"{self.visit(node.task)}.result()"
 
-    # --- Listener / HTTP --- (Simplified for compilation)
     
     def visit_Listen(self, node: Listen):
-        # We need to inject the Handler class HERE or rely on a generic one?
-        # The Handler needs access to `http_routes` which might be defined dynamically.
-        # We'll use a global routes dict in the generated code.
         port = self.visit(node.port)
         code = f"server_address = ('', {port})\n"
         code += f"{self.indent()}httpd = HTTPServer(server_address, ShellLiteHTTPHandler)\n"
@@ -630,15 +559,8 @@ class Compiler:
          return f"GLOBAL_STATIC_ROUTES[{self.visit(node.url)}] = {self.visit(node.folder)}"
 
     def visit_OnRequest(self, node: OnRequest):
-        # registers route to GLOBAL_ROUTES
-        # We need to define ShellLiteHTTPHandler that uses GLOBAL_ROUTES
-        # We should add this to Preamble!
         path = self.visit(node.path)
         
-        # We need to wrap the body in a function?
-        # on request "/foo": ... body ...
-        # -> def handler_foo(): ... body ...
-        # -> GLOBAL_ROUTES["/foo"] = handler_foo
         
         func_name = f"route_handler_{abs(hash(str(node.path)))}_{random.randint(0,1000)}"
         

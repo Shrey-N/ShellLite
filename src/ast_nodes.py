@@ -257,7 +257,6 @@ class FileWatcher(Node):
     path: Node
     body: List[Node]
 
-# --- New GUI Nodes ---
 @dataclass
 class Alert(Node):
     message: Node
@@ -270,7 +269,6 @@ class Prompt(Node):
 class Confirm(Node):
     prompt: Node
 
-# --- Async Nodes ---
 @dataclass
 class Spawn(Node):
     call: Node

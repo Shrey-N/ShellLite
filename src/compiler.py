@@ -3,42 +3,31 @@ from typing import List
 from .ast_nodes import *
 from .runtime import get_std_modules
 import random
-
-
 class Compiler:
     def __init__(self):
         self.indentation = 0
-        
     def indent(self):
         return "    " * self.indentation
-        
     def visit(self, node: Node) -> str:
         method_name = f'visit_{type(node).__name__}'
         visitor = getattr(self, method_name, self.generic_visit)
         return visitor(node)
-        
     def generic_visit(self, node: Node):
         raise Exception(f"Compiler does not support {type(node).__name__}")
-        
     def compile_block(self, statements: List[Node]) -> str:
         if not statements:
             return f"{self.indent()}pass"
-            
         code = ""
         code = ""
         for stmt in statements:
             stmt_code = self.visit(stmt)
-            
             is_expr = isinstance(stmt, (Number, String, Boolean, Regex, ListVal, Dictionary, SetVal, VarAccess, BinOp, UnaryOp, Call, MethodCall, PropertyAccess, IndexAccess, Await))
             is_block_call = isinstance(stmt, Call) and stmt.body
-            
             if is_expr and not is_block_call:
                 stmt_code = f"_slang_ret = {stmt_code}\n_web_builder.add_text(_slang_ret)"
-            
             indented_stmt = "\n".join([f"{self.indent()}{line}" for line in stmt_code.split('\n')])
             code += indented_stmt + "\n"
         return code.rstrip()
-
     def compile(self, statements: List[Node]) -> str:
         code = [
             "import sys",
@@ -160,25 +149,17 @@ class Compiler:
             "    globals()[t] = _make_tag_fn(t)",
             "",
         ]
-        
         code.append("# --- User Script ---")
         code.append(self.compile_block(statements))
-        
         return "\n".join(code)
-
-
     def visit_Number(self, node: Number):
         return str(node.value)
-
     def visit_String(self, node: String):
         return repr(node.value)
-
     def visit_Boolean(self, node: Boolean):
         return str(node.value)
-        
     def visit_Regex(self, node: Regex):
         return f"re.compile({repr(node.pattern)})"
-
     def visit_ListVal(self, node: ListVal):
         elements = []
         for e in node.elements:
@@ -187,30 +168,20 @@ class Compiler:
             else:
                 elements.append(self.visit(e))
         return f"[{', '.join(elements)}]"
-
     def visit_Dictionary(self, node: Dictionary):
         pairs = [f"{self.visit(k)}: {self.visit(v)}" for k, v in node.pairs]
         return f"{{{', '.join(pairs)}}}"
-        
     def visit_SetVal(self, node: SetVal):
         elements = [self.visit(e) for e in node.elements]
         return f"{{{', '.join(elements)}}}"
-
     def visit_VarAccess(self, node: VarAccess):
         return node.name
-
     def visit_Assign(self, node: Assign):
         return f"{node.name} = {self.visit(node.value)}"
-
     def visit_ConstAssign(self, node: ConstAssign):
         return f"{node.name} = {self.visit(node.value)}"
-    
     def visit_PropertyAssign(self, node: PropertyAssign):
-        
-        
-        
         return f"{node.instance_name}.{node.property_name} = {self.visit(node.value)}"
-
     def visit_BinOp(self, node: BinOp):
         left = self.visit(node.left)
         right = self.visit(node.right)
@@ -220,71 +191,59 @@ class Compiler:
         elif op == 'and' or op == 'or':
              return f"({left} {op} {right})"
         return f"({left} {op} {right})"
-
     def visit_UnaryOp(self, node: UnaryOp):
         return f"({node.op} {self.visit(node.right)})"
-
     def visit_Print(self, node: Print):
         if node.color or node.style:
             return f"slang_color_print({self.visit(node.expression)}, {repr(node.color)}, {repr(node.style)})"
         return f"print({self.visit(node.expression)})"
-        
     def visit_Input(self, node: Input):
         if node.prompt:
             return f"input({repr(node.prompt)})"
         return "input()"
-
     def visit_If(self, node: If):
         code = f"if {self.visit(node.condition)}:\n"
         self.indentation += 1
         code += self.compile_block(node.body)
         self.indentation -= 1
-        
         if node.else_body:
             code += f"\n{self.indent()}else:\n"
             self.indentation += 1
             code += self.compile_block(node.else_body)
             self.indentation -= 1
         return code
-
     def visit_While(self, node: While):
         code = f"while {self.visit(node.condition)}:\n"
         self.indentation += 1
         code += self.compile_block(node.body)
         self.indentation -= 1
         return code
-
     def visit_For(self, node: For):
         code = f"for _ in range({self.visit(node.count)}):\n"
         self.indentation += 1
         code += self.compile_block(node.body)
         self.indentation -= 1
         return code
-
     def visit_ForIn(self, node: ForIn):
         code = f"for {node.var_name} in {self.visit(node.iterable)}:\n"
         self.indentation += 1
         code += self.compile_block(node.body)
         self.indentation -= 1
         return code
-        
     def visit_Repeat(self, node: Repeat):
-        return self.visit_For(For(node.count, node.body)) # Same as For count
-
+        return self.visit_For(For(node.count, node.body)) 
     def visit_Forever(self, node: Forever):
         code = f"while True:\n"
         self.indentation += 1
         code += self.compile_block(node.body)
         self.indentation -= 1
         return code
-
     def visit_Until(self, node: Until):
          code = f"while not ({self.visit(node.condition)}):\n"
          self.indentation += 1
          code += self.compile_block(node.body)
          self.indentation -= 1
          return code
-
     def visit_ProgressLoop(self, node: ProgressLoop):
         loop = node.loop_node
         if isinstance(loop, (For, Repeat)):
@@ -309,30 +268,24 @@ class Compiler:
              code += f"\n{self.indent()}print(f'Progress: [{{(\"=\"*20)}}] 100%')"
              return code
         return "# Progress only supported for range/in loops"
-
     def visit_Convert(self, node: Convert):
         if node.target_format.lower() == 'json':
             return f"slang_json_stringify({self.visit(node.expression)})"
         return f"{self.visit(node.expression)} # Unknown format"
-
     def visit_Download(self, node: Download):
         return f"slang_download({self.visit(node.url)})"
-
     def visit_ArchiveOp(self, node: ArchiveOp):
         return f"slang_archive({repr(node.op)}, {self.visit(node.source)}, {self.visit(node.target)})"
-
     def visit_CsvOp(self, node: CsvOp):
         if node.op == 'load':
             return f"slang_csv_load({self.visit(node.path)})"
         else:
             return f"slang_csv_save({self.visit(node.data)}, {self.visit(node.path)})"
-
     def visit_ClipboardOp(self, node: ClipboardOp):
         if node.op == 'copy':
              return f"slang_clipboard_copy({self.visit(node.content)})"
         else:
              return f"slang_clipboard_paste()"
-
     def visit_AutomationOp(self, node: AutomationOp):
         args = [self.visit(a) for a in node.args]
         if node.action == 'press': return f"slang_press({args[0]})"
@@ -340,16 +293,12 @@ class Compiler:
         if node.action == 'click': return f"slang_click({args[0]}, {args[1]})"
         if node.action == 'notify': return f"slang_notify({args[0]}, {args[1]})"
         return "pass"
-
     def visit_DateOp(self, node: DateOp):
         return f"slang_date_parse({repr(node.expr)})"
-
     def visit_FileWrite(self, node: FileWrite):
         return f"slang_file_write({self.visit(node.path)}, {self.visit(node.content)}, {repr(node.mode)})"
-
     def visit_FileRead(self, node: FileRead):
         return f"slang_file_read({self.visit(node.path)})"
-
     def visit_DatabaseOp(self, node: DatabaseOp):
         if node.op == 'open': return f"slang_db_open({self.visit(node.args[0])})"
         if node.op == 'close': return f"slang_db_close()"
@@ -360,7 +309,6 @@ class Compiler:
              params = self.visit(node.args[1]) if len(node.args) > 1 else "[]"
              return f"slang_db_query({self.visit(node.args[0])}, {params})"
         return "None"
-
     def visit_Every(self, node: Every):
         interval = self.visit(node.interval)
         if node.unit == 'minutes': interval = f"({interval} * 60)"
@@ -370,14 +318,12 @@ class Compiler:
         code += f"\n{self.indent()}time.sleep({interval})"
         self.indentation -= 1
         return code
-
     def visit_After(self, node: After):
         delay = self.visit(node.delay)
         if node.unit == 'minutes': delay = f"({delay} * 60)"
         code = f"time.sleep({delay})\n"
         code += self.compile_block(node.body)
         return code
-
     def visit_FunctionDef(self, node: FunctionDef):
         args_strs = []
         for arg_name, default_node, type_hint in node.args:
@@ -385,61 +331,44 @@ class Compiler:
                 args_strs.append(f"{arg_name}={self.visit(default_node)}")
             else:
                 args_strs.append(arg_name)
-        
         code = f"def {node.name}({', '.join(args_strs)}):\n"
-        
         old_indent = self.indentation
         self.indentation = 1
-        
         code += f"{self.indent()}_slang_ret = None\n"
         code += self.compile_block(node.body)
         code += f"\n{self.indent()}return _slang_ret"
-        
         self.indentation = old_indent
         return code
-
     def visit_Return(self, node: Return):
         return f"return {self.visit(node.value)}"
-
     def visit_Call(self, node: Call):
         args = [self.visit(a) for a in node.args]
         call_expr = f"{node.name}({', '.join(args)})"
-        
         if node.body:
              var_name = f"_tag_{random.randint(0, 1000000)}"
              code = f"{var_name} = {call_expr}\n"
              code += f"with BuilderContext({var_name}):\n"
-             
              old_indent = self.indentation
              self.indentation = 1
              code += self.compile_block(node.body)
              self.indentation = old_indent
-             
-             
              code += f"\n_slang_ret = {var_name}" 
              code += f"\n_web_builder.add_text({var_name})"
              return code 
-             
         return call_expr
-
     def visit_ClassDef(self, node: ClassDef):
         parent = node.parent if node.parent else "Instance"
         code = f"class {node.name}({parent}):\n"
         self.indentation += 1
-        
         args = ["self"] + node.properties
         assigns = [f"self.{p} = {p}" for p in node.properties]
         if not assigns:
             assigns = ["pass"]
-            
         code += f"{self.indent()}def __init__({', '.join(args)}):\n"
-        
-        
         self.indentation += 1
         for assign in assigns:
             code += f"{self.indent()}{assign}\n"
         self.indentation -= 1
-        
         for method in node.methods:
             old_args = method.args
             m_args = ["self"]
@@ -448,105 +377,82 @@ class Compiler:
                     m_args.append(f"{arg_name}={self.visit(default_node)}")
                 else:
                     m_args.append(arg_name)
-            
             code += f"\n{self.indent()}def {method.name}({', '.join(m_args)}):\n"
             self.indentation += 1
             code += self.compile_block(method.body)
             self.indentation -= 1
-            
         self.indentation -= 1
         return code
-
     def visit_Instantiation(self, node: Instantiation):
         args = [self.visit(a) for a in node.args]
         return f"{node.var_name} = {node.class_name}({', '.join(args)})"
-
     def visit_Make(self, node: Make):
          args = [self.visit(a) for a in node.args]
          return f"{node.class_name}({', '.join(args)})"
-
     def visit_MethodCall(self, node: MethodCall):
         args = [self.visit(a) for a in node.args]
         return f"{node.instance_name}.{node.method_name}({', '.join(args)})"
-
     def visit_PropertyAccess(self, node: PropertyAccess):
         return f"{node.instance_name}.{node.property_name}"
-
     def visit_Import(self, node: Import):
         if node.path in ('math', 'time', 'http', 'env', 'args', 'path', 're'):
              return f"{node.path} = STD_MODULES['{node.path}']"
         else:
              base = os.path.basename(node.path).replace('.shl', '').replace('.py', '')
              return f"import {base}"
-
     def visit_ImportAs(self, node: ImportAs):
         if node.path in ('math', 'time', 'http', 'env', 'args', 'path', 're'):
              return f"{node.alias} = STD_MODULES['{node.path}']"
         base = os.path.basename(node.path).replace('.shl', '').replace('.py', '')
         return f"import {base} as {node.alias}"
-
     def visit_Try(self, node: Try):
         code = f"try:\n"
         self.indentation += 1
         code += self.compile_block(node.try_body)
         self.indentation -= 1
-        
         code += f"\n{self.indent()}except Exception as {node.catch_var}:\n"
         self.indentation += 1
         code += self.compile_block(node.catch_body)
         self.indentation -= 1
         return code
-
     def visit_TryAlways(self, node: TryAlways):
         code = f"try:\n"
         self.indentation += 1
         code += self.compile_block(node.try_body)
         self.indentation -= 1
-        
         if node.catch_body:
             code += f"\n{self.indent()}except Exception as {node.catch_var}:\n"
             self.indentation += 1
             code += self.compile_block(node.catch_body)
             self.indentation -= 1
-            
         code += f"\n{self.indent()}finally:\n"
         self.indentation += 1
         code += self.compile_block(node.always_body)
         self.indentation -= 1
         return code
-
     def visit_Throw(self, node: Throw):
         return f"raise Exception({self.visit(node.message)})"
-        
     def visit_Stop(self, node: Stop): return "break"
     def visit_Skip(self, node: Skip): return "continue"
     def visit_Exit(self, node: Exit): 
         code = self.visit(node.code) if node.code else "0"
         return f"sys.exit({code})"
-
     def visit_ListComprehension(self, node: ListComprehension):
         iter_str = self.visit(node.iterable)
         expr_str = self.visit(node.expr)
         cond_str = f" if {self.visit(node.condition)}" if node.condition else ""
         return f"[{expr_str} for {node.var_name} in {iter_str}{cond_str}]"
-        
     def visit_Lambda(self, node: Lambda):
         return f"lambda {', '.join(node.params)}: {self.visit(node.body)}"
-        
     def visit_Ternary(self, node: Ternary):
         return f"({self.visit(node.true_expr)} if {self.visit(node.condition)} else {self.visit(node.false_expr)})"
-
-    
     def visit_Spawn(self, node: Spawn):
         if isinstance(node.call, Call):
             args = [self.visit(a) for a in node.call.args]
             return f"_executor.submit({node.call.name}, {', '.join(args)})"
-        return f"_executor.submit({self.visit(node.call)})" # Fallback
-
+        return f"_executor.submit({self.visit(node.call)})" 
     def visit_Await(self, node: Await):
         return f"{self.visit(node.task)}.result()"
-
-    
     def visit_Listen(self, node: Listen):
         port = self.visit(node.port)
         code = f"server_address = ('', {port})\n"
@@ -554,43 +460,29 @@ class Compiler:
         code += f"{self.indent()}print(f'Serving on port {{server_address[1]}}...')\n"
         code += f"{self.indent()}httpd.serve_forever()"
         return code
-
     def visit_ServeStatic(self, node: ServeStatic):
          return f"GLOBAL_STATIC_ROUTES[{self.visit(node.url)}] = {self.visit(node.folder)}"
-
     def visit_OnRequest(self, node: OnRequest):
         path = self.visit(node.path)
-        
-        
         func_name = f"route_handler_{abs(hash(str(node.path)))}_{random.randint(0,1000)}"
-        
         code = f"def {func_name}():\n"
-        
         old_indent = self.indentation
         self.indentation = 1
-        
         code += f"{self.indent()}_slang_ret = None\n"
         code += self.compile_block(node.body)
         code += f"\n{self.indent()}return _slang_ret"
-        
         self.indentation = old_indent
-        
         code += f"\nGLOBAL_ROUTES[{path}] = {func_name}"
         return code
-
     def visit_Alert(self, node: Alert):
         return f"slang_alert({self.visit(node.message)})"
-        
     def visit_Prompt(self, node: Prompt):
         return f"slang_prompt({self.visit(node.prompt)})"
-        
     def visit_Confirm(self, node: Confirm):
         return f"slang_confirm({self.visit(node.prompt)})"
-
     def visit_FileWatcher(self, node: FileWatcher):
         path_var = f"fw_path_{random.randint(0,1000)}"
         mtime_var = f"fw_mtime_{random.randint(0,1000)}"
-        
         code = f"{path_var} = {self.visit(node.path)}\n"
         code += f"{self.indent()}{mtime_var} = os.path.getmtime({path_var}) if os.path.exists({path_var}) else 0\n"
         code += f"{self.indent()}while True:\n"
@@ -607,4 +499,3 @@ class Compiler:
         self.indentation -= 1
         self.indentation -= 1
         return code
-

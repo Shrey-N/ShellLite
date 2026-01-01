@@ -2,42 +2,33 @@ from typing import List, Optional
 from .lexer import Token, Lexer
 from .ast_nodes import *
 import re
-
 class Parser:
     def __init__(self, tokens: List[Token]):
         self.tokens = [t for t in tokens if t.type != 'COMMENT']
         self.pos = 0
-
     def peek(self, offset: int = 0) -> Token:
         if self.pos + offset < len(self.tokens):
             return self.tokens[self.pos + offset]
         return self.tokens[-1]
-
     def consume(self, expected_type: str = None) -> Token:
         token = self.peek()
         if expected_type and token.type != expected_type:
             raise SyntaxError(f"Expected {expected_type} but got {token.type} on line {token.line}")
         self.pos += 1
         return token
-
     def check(self, token_type: str) -> bool:
         return self.peek().type == token_type
-
     def parse(self) -> List[Node]:
         statements = []
         while not self.check('EOF'):
             while self.check('NEWLINE'):
                 self.consume()
                 if self.check('EOF'): break
-            
             if self.check('EOF'): break
-            
             stmt = self.parse_statement()
             if stmt:
                 statements.append(stmt)
         return statements
-
-
     def parse_statement(self) -> Node:
         if self.check('USE'):
             return self.parse_import()
@@ -96,7 +87,7 @@ class Parser:
         elif self.check('SPAWN'):
              expr = self.parse_expression()
              self.consume('NEWLINE')
-             return Print(expr) # Hack: Wrap in Print to execute? No, just expression stmt
+             return Print(expr) 
              pass
         elif self.check('WAIT'):
             return self.parse_wait()
@@ -116,8 +107,8 @@ class Parser:
              if self.check('LOAD') and self.peek(1).type == 'CSV':
                  return self.parse_csv_load()
              if self.check('SAVE'):
-                 return self.parse_csv_save() # We'll need to check "to csv" inside
-             return self.parse_expression_stmt() # Fallback
+                 return self.parse_csv_save() 
+             return self.parse_expression_stmt() 
         elif self.check('COPY') or self.check('PASTE'):
              return self.parse_clipboard()
         elif self.check('WRITE'):
@@ -142,7 +133,6 @@ class Parser:
             return self.parse_paragraph()
         else:
             return self.parse_expression_stmt()
-
     def parse_alert(self) -> Alert:
         token = self.consume('ALERT')
         message = self.parse_expression()
@@ -150,10 +140,6 @@ class Parser:
         node = Alert(message)
         node.line = token.line
         return node
-        
-
-
-
     def parse_const(self) -> ConstAssign:
         token = self.consume('CONST')
         name = self.consume('ID').value
@@ -163,53 +149,38 @@ class Parser:
         node = ConstAssign(name, value)
         node.line = token.line
         return node
-
-    
     def parse_on(self) -> Node:
-        """Parse: on file_change "path" ... OR on request to "/path" ..."""
         token = self.consume('ON')
-        
         if self.check('REQUEST') or (self.check('ID') and self.peek().value == 'request'):
             self.consume()
             if self.check('TO'): self.consume('TO')
-            
-            path = self.parse_expression() # path pattern
-            
+            path = self.parse_expression() 
             self.consume('NEWLINE')
             self.consume('INDENT')
-            
             body = []
             while not self.check('DEDENT') and not self.check('EOF'):
                 while self.check('NEWLINE'): self.consume()
                 if self.check('DEDENT'): break
                 body.append(self.parse_statement())
             self.consume('DEDENT')
-            
             node = OnRequest(path, body)
             node.line = token.line
             return node
-            
         event_type = self.consume('ID').value
         path = self.parse_expression()
-        
         self.consume('NEWLINE')
         self.consume('INDENT')
-        
         body = []
         while not self.check('DEDENT') and not self.check('EOF'):
             while self.check('NEWLINE'): self.consume()
             if self.check('DEDENT'): break
             body.append(self.parse_statement())
-            
         self.consume('DEDENT')
         return FileWatcher(path, body)
-
     def _parse_natural_list(self) -> ListVal:
-        """Parse: a list of x, y, z"""
-        self.consume('ID') # a
+        self.consume('ID') 
         self.consume('LIST')
         self.consume('OF')
-        
         elements = []
         if not self.check('NEWLINE') and not self.check('EOF'):
             elements.append(self.parse_expression())
@@ -217,17 +188,13 @@ class Parser:
                 self.consume('COMMA')
                 if self.check('NEWLINE'): break 
                 elements.append(self.parse_expression())
-                
         node = ListVal(elements)
         return node
-
     def _parse_natural_set(self) -> Node:
-        """Parse: a unique set of x, y, z -> Set([x,y,z])"""
-        self.consume('ID') # a
+        self.consume('ID') 
         self.consume('UNIQUE')
         self.consume('SET')
         self.consume('OF')
-        
         elements = []
         if not self.check('NEWLINE') and not self.check('EOF'):
             elements.append(self.parse_expression())
@@ -235,76 +202,54 @@ class Parser:
                 self.consume('COMMA')
                 if self.check('NEWLINE'): break
                 elements.append(self.parse_expression())
-        
         list_node = ListVal(elements)
         return Call('Set', [list_node])
-
     def parse_wait(self) -> Node:
-        """Parse: wait for 2 seconds (or just wait 2)"""
         token = self.consume('WAIT')
-        
         if self.check('FOR'):
             self.consume('FOR')
-            
         time_expr = self.parse_expression()
-        
         if self.check('SECOND'):
             self.consume()
-        
         self.consume('NEWLINE')
-        
         return Call('wait', [time_expr])
-
-    
     def parse_stop(self) -> Stop:
-        """Parse: stop"""
         token = self.consume('STOP')
         self.consume('NEWLINE')
         node = Stop()
         node.line = token.line
         return node
-
     def parse_skip(self) -> Skip:
-        """Parse: skip"""
         token = self.consume('SKIP')
         self.consume('NEWLINE')
         node = Skip()
         node.line = token.line
         return node
-
     def parse_error(self) -> Throw:
-        """Parse: error 'message'"""
         token = self.consume('ERROR')
         message = self.parse_expression()
         self.consume('NEWLINE')
         node = Throw(message)
         node.line = token.line
         return node
-
     def parse_execute(self) -> Execute:
-        """Parse: execute 'code string'"""
         token = self.consume('EXECUTE')
         code = self.parse_expression()
         self.consume('NEWLINE')
         node = Execute(code)
         node.line = token.line
         return node
-
     def parse_unless(self) -> Unless:
-        """Parse: unless condition (body)"""
         token = self.consume('UNLESS')
         condition = self.parse_expression()
         self.consume('NEWLINE')
         self.consume('INDENT')
-        
         body = []
         while not self.check('DEDENT') and not self.check('EOF'):
             while self.check('NEWLINE'): self.consume()
             if self.check('DEDENT'): break
             body.append(self.parse_statement())
-        
         self.consume('DEDENT')
-        
         else_body = None
         if self.check('ELSE'):
             self.consume('ELSE')
@@ -316,48 +261,37 @@ class Parser:
                 if self.check('DEDENT'): break
                 else_body.append(self.parse_statement())
             self.consume('DEDENT')
-        
         node = Unless(condition, body, else_body)
         node.line = token.line
         return node
-
     def parse_until(self) -> Until:
-        """Parse: until condition (body)"""
         token = self.consume('UNTIL')
         condition = self.parse_expression()
         self.consume('NEWLINE')
         self.consume('INDENT')
-        
         body = []
         while not self.check('DEDENT') and not self.check('EOF'):
             while self.check('NEWLINE'): self.consume()
             if self.check('DEDENT'): break
             body.append(self.parse_statement())
-        
         self.consume('DEDENT')
         node = Until(condition, body)
         node.line = token.line
         return node
-
     def parse_forever(self) -> Forever:
-        """Parse: forever (body) - infinite loop"""
         token = self.consume('FOREVER')
         self.consume('NEWLINE')
         self.consume('INDENT')
-        
         body = []
         while not self.check('DEDENT') and not self.check('EOF'):
             while self.check('NEWLINE'): self.consume()
             if self.check('DEDENT'): break
             body.append(self.parse_statement())
-        
         self.consume('DEDENT')
         node = Forever(body)
         node.line = token.line
         return node
-
     def parse_exit(self) -> Exit:
-        """Parse: exit or exit 1"""
         token = self.consume('EXIT')
         code = None
         if not self.check('NEWLINE'):
@@ -366,54 +300,38 @@ class Parser:
         node = Exit(code)
         node.line = token.line
         return node
-
     def parse_make(self) -> Node:
-        """Parse: make Robot 'name' 100  or  new Robot 'name' 100"""
         token = self.consume('MAKE')
         class_name = self.consume('ID').value
-        
         args = []
         while not self.check('NEWLINE') and not self.check('EOF'):
             args.append(self.parse_expression())
-        
         self.consume('NEWLINE')
         node = Make(class_name, args)
         node.line = token.line
         return node
-
     def parse_repeat(self) -> Repeat:
-        """Parse: repeat 5 times (body) or repeat (body)"""
         token = self.consume('REPEAT')
-        
         if self.check('NEWLINE'):
             raise SyntaxError(f"repeat requires a count on line {token.line}")
-        
         count = self.parse_expression()
-        
         if self.check('TIMES'):
             self.consume('TIMES')
-        
         self.consume('NEWLINE')
         self.consume('INDENT')
-        
         body = []
         while not self.check('DEDENT') and not self.check('EOF'):
             while self.check('NEWLINE'): self.consume()
             if self.check('DEDENT'): break
             body.append(self.parse_statement())
-        
         self.consume('DEDENT')
         node = Repeat(count, body)
         node.line = token.line
         return node
-
         return node
-
     def parse_db_op(self) -> DatabaseOp:
-        """Parse: db open "path", db query "sql", db close, db exec "sql" """
         token = self.consume('DB')
-        
-        op = 'open' # default? no
+        op = 'open' 
         if self.check('OPEN'): op = 'open'; self.consume()
         elif self.check('QUERY'): op = 'query'; self.consume()
         elif self.check('EXEC'): op = 'exec'; self.consume()
@@ -423,37 +341,28 @@ class Parser:
                  op = 'open'
              else:
                  raise SyntaxError(f"Unknown db operation at line {token.line}")
-        
         args = []
         if op != 'close' and not self.check('NEWLINE'):
              args.append(self.parse_expression())
              while not self.check('NEWLINE'):
                  args.append(self.parse_expression())
-                 
         node = DatabaseOp(op, args)
         node.line = token.line
         return node
-
     def parse_middleware(self) -> Node:
-        """Parse: before request ..."""
         token = self.consume('BEFORE')
         self.consume('REQUEST')
         self.consume('NEWLINE')
         self.consume('INDENT')
-        
         body = []
         while not self.check('DEDENT') and not self.check('EOF'):
             while self.check('NEWLINE'): self.consume()
             if self.check('DEDENT'): break
             body.append(self.parse_statement())
         self.consume('DEDENT')
-        
         return OnRequest(String('__middleware__'), body)
-
     def parse_when(self) -> Node:
-        """Parse: when value is x => (body) ... OR when condition (body) OR when someone visits/submits"""
         token = self.consume('WHEN')
-        
         if self.check('SOMEONE'):
             self.consume('SOMEONE')
             if self.check('VISITS'):
@@ -486,36 +395,29 @@ class Parser:
                 node = OnRequest(path, body)
                 node.line = token.line
                 return node
-        
         condition_or_value = self.parse_expression()
         self.consume('NEWLINE')
         self.consume('INDENT')
-        
         if self.check('IS'):
             cases = []
             otherwise = None
-            
             while not self.check('DEDENT') and not self.check('EOF'):
                 if self.check('IS'):
                     self.consume('IS')
                     match_val = self.parse_expression()
                     self.consume('NEWLINE')
                     self.consume('INDENT')
-                    
                     case_body = []
                     while not self.check('DEDENT') and not self.check('EOF'):
                         while self.check('NEWLINE'): self.consume()
                         if self.check('DEDENT'): break
                         case_body.append(self.parse_statement())
                     self.consume('DEDENT')
-                    
                     cases.append((match_val, case_body))
-                    
                 elif self.check('OTHERWISE'):
                     self.consume('OTHERWISE')
                     self.consume('NEWLINE')
                     self.consume('INDENT')
-                    
                     otherwise = []
                     while not self.check('DEDENT') and not self.check('EOF'):
                         while self.check('NEWLINE'): self.consume()
@@ -526,21 +428,17 @@ class Parser:
                     self.consume('NEWLINE')
                 else:
                     break
-            
             self.consume('DEDENT')
             node = When(condition_or_value, cases, otherwise)
             node.line = token.line
             return node
-            
         else:
             body = []
             while not self.check('DEDENT') and not self.check('EOF'):
                 while self.check('NEWLINE'): self.consume()
                 if self.check('DEDENT'): break
                 body.append(self.parse_statement())
-            
             self.consume('DEDENT')
-            
             else_body = None
             if self.check('ELSE'):
                 self.consume('ELSE')
@@ -552,11 +450,9 @@ class Parser:
                     if self.check('DEDENT'): break
                     else_body.append(self.parse_statement())
                 self.consume('DEDENT')
-                
             node = If(condition_or_value, body, else_body)
             node.line = token.line
             return node
-
     def parse_return(self) -> Return:
         token = self.consume('RETURN')
         expr = self.parse_expression()
@@ -564,16 +460,13 @@ class Parser:
         node = Return(expr)
         node.line = token.line
         return node
-
     def parse_function_def(self) -> FunctionDef:
         start_token = self.consume('TO')
         name = self.consume('ID').value
-        
         args = []
         while self.check('ID'):
             arg_name = self.consume('ID').value
             type_hint = None
-            
             if self.check('COLON'):
                 if self.peek(1).type == 'NEWLINE':
                     pass 
@@ -586,46 +479,36 @@ class Parser:
                         self.consume()
                     else: 
                          type_hint = self.consume().value 
-            
             default_val = None
             if self.check('ASSIGN'):
                 self.consume('ASSIGN')
                 default_val = self.parse_expression()
             args.append((arg_name, default_val, type_hint))
-            
         if self.check('COLON'):
             self.consume('COLON')
-            
         self.consume('NEWLINE')
         self.consume('INDENT')
-        
         body = []
         while not self.check('DEDENT') and not self.check('EOF'):
             while self.check('NEWLINE'): self.consume()
             if self.check('DEDENT'): break
             body.append(self.parse_statement())
-            
         self.consume('DEDENT')
         node = FunctionDef(name, args, body)
         node.line = start_token.line
         return node
-
     def parse_class_def(self) -> ClassDef:
         start_token = self.consume('STRUCTURE')
         name = self.consume('ID').value
-        
         parent = None
         if self.check('LPAREN'):
             self.consume('LPAREN')
             parent = self.consume('ID').value
             self.consume('RPAREN')
-            
         self.consume('NEWLINE')
         self.consume('INDENT')
-        
         properties = []
         methods = []
-        
         while not self.check('DEDENT') and not self.check('EOF'):
             if self.check('HAS'):
                 self.consume()
@@ -636,29 +519,18 @@ class Parser:
             elif self.check('NEWLINE'):
                 self.consume()
             else:
-                self.consume('DEDENT') # break out if unexpected
+                self.consume('DEDENT') 
                 break
-
         self.consume('DEDENT')
         node = ClassDef(name, properties, methods, parent)
         node.line = start_token.line
         return node
-    
     def parse_id_start_statement(self, passed_name_token=None) -> Node:
-        """
-        Handles statements starting with ID.
-        1. Assignment: name = expr
-        2. Instantiation: name is Model arg1 arg2
-        3. Function Call: name arg1 arg2
-        4. Method Call: name.method
-        5. Property Access (Expression stmt): name.prop
-        """
         if passed_name_token:
             name_token = passed_name_token
         else:
             name_token = self.consume('ID')
         name = name_token.value
-        
         if self.check('ASSIGN'):
             self.consume('ASSIGN')
             value = self.parse_expression()
@@ -666,7 +538,6 @@ class Parser:
             node = Assign(name, value)
             node.line = name_token.line
             return node
-            
         elif self.check('PLUSEQ'):
             self.consume('PLUSEQ')
             value = self.parse_expression()
@@ -674,7 +545,6 @@ class Parser:
             node = Assign(name, BinOp(VarAccess(name), '+', value))
             node.line = name_token.line
             return node
-            
         elif self.check('MINUSEQ'):
             self.consume('MINUSEQ')
             value = self.parse_expression()
@@ -682,7 +552,6 @@ class Parser:
             node = Assign(name, BinOp(VarAccess(name), '-', value))
             node.line = name_token.line
             return node
-            
         elif self.check('MULEQ'):
             self.consume('MULEQ')
             value = self.parse_expression()
@@ -690,7 +559,6 @@ class Parser:
             node = Assign(name, BinOp(VarAccess(name), '*', value))
             node.line = name_token.line
             return node
-            
         elif self.check('DIVEQ'):
             self.consume('DIVEQ')
             value = self.parse_expression()
@@ -698,33 +566,27 @@ class Parser:
             node = Assign(name, BinOp(VarAccess(name), '/', value))
             node.line = name_token.line
             return node
-        
         elif self.check('IS'):
             token_is = self.consume('IS')
-            
             if self.check('ID') and self.peek().value == 'a':
                 self.consume()
-                
             if self.check('LIST'):
                 self.consume('LIST')
                 self.consume('NEWLINE')
                 node = Assign(name, ListVal([]))
                 node.line = token_is.line
                 return node
-                
             if self.check('ID') and self.peek().value in ('dictionary', 'map', 'dict'):
                 self.consume()
                 self.consume('NEWLINE')
                 node = Assign(name, Dictionary([]))
                 node.line = token_is.line
                 return node
-            
-            if self.check('ID') and not self.peek().value in ('{', '['): # sanity check or just check ID
+            if self.check('ID') and not self.peek().value in ('{', '['): 
                 class_name = self.consume('ID').value
                 args = []
                 while not self.check('NEWLINE') and not self.check('EOF'):
                     args.append(self.parse_expression()) 
-                
                 self.consume('NEWLINE')
                 node = Instantiation(name, class_name, args)
                 node.line = token_is.line
@@ -735,27 +597,22 @@ class Parser:
                 node = Assign(name, value)
                 node.line = token_is.line
                 return node
-            
         elif self.check('DOT'):
             self.consume('DOT')
             member_token = self.consume()
             member = member_token.value
-            
             if self.check('ASSIGN'):
                 self.consume('ASSIGN')
                 value = self.parse_expression()
                 self.consume('NEWLINE')
                 return PropertyAssign(name, member, value)
-                
             args = []
             while not self.check('NEWLINE') and not self.check('EOF'):
                 args.append(self.parse_expression())
-            
             self.consume('NEWLINE')
             node = MethodCall(name, member, args)
             node.line = name_token.line
             return node
-
         else:
             if not self.check('NEWLINE') and not self.check('EOF') and not self.check('EQ') and not self.check('IS'):
                 args = []
@@ -765,7 +622,6 @@ class Parser:
                          t_type = self.peek().type
                          if t_type in ('ID', 'STRUCTURE', 'TYPE', 'FOR', 'IN', 'WHILE', 'IF', 'ELSE', 'FROM', 'TO', 'STRING', 'EXTENDS', 'WITH', 'PLACEHOLDER', 'NAME', 'VALUE', 'ACTION', 'METHOD', 'HREF', 'SRC', 'CLASS', 'STYLE'):
                              is_named_arg = True
-                     
                      if is_named_arg:
                          key_token = self.consume()
                          key = key_token.value
@@ -776,14 +632,12 @@ class Parser:
                          if self.check('USING'):
                              self.consume('USING')
                          args.append(self.parse_expression())
-                         
                 if self.check('NEWLINE'):
                     self.consume('NEWLINE')
                 elif self.check('INDENT'):
                     pass
                 else:
                     self.consume('NEWLINE')
-                
                 body = None
                 if self.check('INDENT'):
                     self.consume('INDENT')
@@ -793,23 +647,18 @@ class Parser:
                         if self.check('DEDENT'): break
                         body.append(self.parse_statement())
                     self.consume('DEDENT')
-
                 node = Call(name, args, body)
                 node.line = name_token.line
                 return node
-
                 node = Call(name, args, body)
                 node.line = name_token.line
                 return node
-
             if self.check('NEWLINE'):
                 self.consume('NEWLINE')
             elif self.check('INDENT'):
                 pass
             else:
                  self.consume('NEWLINE')
-
-            
             if self.check('INDENT'):
                 self.consume('INDENT')
                 body = []
@@ -818,11 +667,9 @@ class Parser:
                     if self.check('DEDENT'): break
                     body.append(self.parse_statement())
                 self.consume('DEDENT')
-                
                 node = Call(name, [], body)
                 node.line = name_token.line
                 return node
-            
             node = VarAccess(name)
             node.line = name_token.line
             return node
@@ -831,51 +678,37 @@ class Parser:
             token = self.consume('PRINT')
         else:
             token = self.consume('SAY')
-            
         if self.check('PROGRESS'):
             return self.parse_progress_loop(token)
-            
         style = None
         color = None
-        
         if self.check('IN'):
             self.consume('IN')
             if self.peek().type in ('RED', 'GREEN', 'BLUE', 'YELLOW', 'CYAN', 'MAGENTA'):
                 color = self.consume().value
-        
         if self.check('BOLD'):
             self.consume('BOLD')
             style = 'bold'
-            
         if self.peek().type in ('RED', 'GREEN', 'BLUE', 'YELLOW', 'CYAN', 'MAGENTA'):
             color = self.consume().value
-            
         expr = self.parse_expression()
         self.consume('NEWLINE')
         node = Print(expression=expr, style=style, color=color)
         node.line = token.line
         return node
-        
     def parse_progress_loop(self, start_token: Token) -> ProgressLoop:
-        """Parse: show progress for i in ..."""
         self.consume('PROGRESS')
-        
         if not (self.check('FOR') or self.check('REPEAT') or self.check('LOOP')):
              raise SyntaxError(f"Expected loop after 'show progress' on line {start_token.line}")
-             
         if self.check('FOR') or self.check('LOOP'):
             loop_node = self.parse_for()
         else:
             loop_node = self.parse_repeat()
-            
         node = ProgressLoop(loop_node)
         node.line = start_token.line
         return node
-    
     def parse_serve(self) -> ServeStatic:
-        """Parse: serve static 'folder' at 'url' OR serve files from 'folder'"""
         token = self.consume('SERVE')
-        
         if self.check('FILES'):
             self.consume('FILES')
             if self.check('FROM'):
@@ -891,7 +724,6 @@ class Parser:
             node = ServeStatic(folder, url)
             node.line = token.line
             return node
-        
         self.consume('STATIC')
         folder = self.parse_expression()
         self.consume('AT')
@@ -900,26 +732,18 @@ class Parser:
         node = ServeStatic(folder, url)
         node.line = token.line
         return node
-
     def parse_listen(self) -> Listen:
-        """Parse: listen on port 8000"""
         token = self.consume('LISTEN')
-        
         if self.check('ON'): self.consume('ON')
         if self.check('PORT'): self.consume('PORT')
-        
         port_num = self.parse_expression()
         self.consume('NEWLINE')
-        
         node = Listen(port_num)
         node.line = token.line
         return node
-        
     def parse_every(self) -> Every:
-        """Parse: every 5 minutes (body)"""
         token = self.consume('EVERY')
         interval = self.parse_expression()
-        
         unit = 'seconds'
         if self.check('MINUTE'): 
             self.consume()
@@ -927,26 +751,20 @@ class Parser:
         elif self.check('SECOND'):
             self.consume()
             unit = 'seconds'
-            
         self.consume('NEWLINE')
         self.consume('INDENT')
-        
         body = []
         while not self.check('DEDENT') and not self.check('EOF'):
             while self.check('NEWLINE'): self.consume()
             if self.check('DEDENT'): break
             body.append(self.parse_statement())
-            
         self.consume('DEDENT')
         node = Every(interval, unit, body)
         node.line = token.line
         return node
-        
     def parse_after(self) -> After:
-        """Parse: in 5 minutes (body)"""
         token = self.consume('IN')
         delay = self.parse_expression()
-        
         unit = 'seconds'
         if self.check('MINUTE'):
             self.consume()
@@ -954,30 +772,22 @@ class Parser:
         elif self.check('SECOND'):
             self.consume()
             unit = 'seconds'
-            
         self.consume('NEWLINE')
         self.consume('INDENT')
-        
         body = []
         while not self.check('DEDENT') and not self.check('EOF'):
             while self.check('NEWLINE'): self.consume()
             if self.check('DEDENT'): break
             body.append(self.parse_statement())
-            
         self.consume('DEDENT')
         node = After(delay, unit, body)
         node.line = token.line
         return node
-
-    
     def parse_define_page(self) -> Node:
-        """Parse: define page Name (using args) = body"""
         token = self.consume('DEFINE')
         if self.check('PAGE'):
             self.consume('PAGE')
-        
         name = self.consume('ID').value
-        
         args = []
         if self.check('USING'):
             self.consume('USING')
@@ -985,90 +795,67 @@ class Parser:
             while self.check('COMMA'):
                 self.consume('COMMA')
                 args.append((self.consume('ID').value, None, None))
-        
         self.consume('NEWLINE')
         self.consume('INDENT')
-        
         body = []
         while not self.check('DEDENT') and not self.check('EOF'):
             while self.check('NEWLINE'): self.consume()
             if self.check('DEDENT'): break
             body.append(self.parse_statement())
         self.consume('DEDENT')
-        
         node = FunctionDef(name, args, body)
         node.line = token.line
         return node
-    
     def parse_add_to(self) -> Node:
-        """Parse: add item to list"""
         token = self.consume('ADD')
         item_expr = self.parse_factor_simple()
-        
         if self.check('TO') or self.check('INTO'):
             self.consume()
-        
         list_name = self.consume('ID').value
         self.consume('NEWLINE')
-        
         list_access = VarAccess(list_name)
         item_list = ListVal([item_expr])
         concat = BinOp(list_access, '+', item_list)
         node = Assign(list_name, concat)
         node.line = token.line
         return node
-    
     def parse_start_server(self) -> Node:
-        """Parse: start server (on port X)"""
         token = self.consume('START')
         if self.check('SERVER'):
             self.consume('SERVER')
-        
         port = Number(8080)
-        
         if self.check('ON'):
             self.consume('ON')
             if self.check('PORT'):
                 self.consume('PORT')
             port = self.parse_expression()
-        
         self.consume('NEWLINE')
-        
         node = Listen(port)
         node.line = token.line
         return node
-    
     def parse_heading(self) -> Node:
-        """Parse: heading 'text' -> h1"""
         token = self.consume('HEADING')
         text = self.parse_expression()
         self.consume('NEWLINE')
-        
         node = Call('h1', [text])
         node.line = token.line
         return node
-    
     def parse_paragraph(self) -> Node:
-        """Parse: paragraph 'text' -> p"""
         token = self.consume('PARAGRAPH')
         text = self.parse_expression()
         self.consume('NEWLINE')
-        
         node = Call('p', [text])
         node.line = token.line
         return node
-
     def parse_assign(self) -> Assign:
         name = self.consume('ID').value
         self.consume('ASSIGN')
         value = self.parse_expression()
         self.consume('NEWLINE')
         return Assign(name, value)
-
     def parse_import(self) -> Node:
         token = self.consume('USE')
         path = self.consume('STRING').value
-        
         if self.check('AS'):
             self.consume('AS')
             alias = self.consume('ID').value
@@ -1077,30 +864,22 @@ class Parser:
         else:
             self.consume('NEWLINE')
             node = Import(path)
-            
         node.line = token.line
         return node
-
     def parse_if(self) -> If:
         self.consume('IF')
         condition = self.parse_expression()
         self.consume('NEWLINE')
         self.consume('INDENT')
-        
         body = []
         while not self.check('DEDENT') and not self.check('EOF'):
             while self.check('NEWLINE'): self.consume()
             if self.check('DEDENT'): break
             body.append(self.parse_statement())
-        
         self.consume('DEDENT')
-        
         else_body = None
-        
-        
         if self.check('ELIF'):
             else_body = [self.parse_elif()]
-            
         elif self.check('ELSE'):
             self.consume('ELSE')
             self.consume('NEWLINE')
@@ -1111,22 +890,18 @@ class Parser:
                 if self.check('DEDENT'): break
                 else_body.append(self.parse_statement())
             self.consume('DEDENT')
-
         return If(condition, body, else_body)
-
     def parse_elif(self) -> If:
         token = self.consume('ELIF')
         condition = self.parse_expression()
         self.consume('NEWLINE')
         self.consume('INDENT')
-        
         body = []
         while not self.check('DEDENT') and not self.check('EOF'):
             while self.check('NEWLINE'): self.consume()
             if self.check('DEDENT'): break
             body.append(self.parse_statement())
         self.consume('DEDENT')
-        
         else_body = None
         if self.check('ELIF'):
             else_body = [self.parse_elif()]
@@ -1140,54 +915,45 @@ class Parser:
                 if self.check('DEDENT'): break
                 else_body.append(self.parse_statement())
             self.consume('DEDENT')
-            
         node = If(condition, body, else_body)
         node.line = token.line
         node = If(condition, body, else_body)
         node.line = token.line
         return node
-
     def parse_while(self) -> While:
         start_token = self.consume('WHILE')
         condition = self.parse_expression()
         self.consume('NEWLINE')
         self.consume('INDENT')
-        
         body = []
         while not self.check('DEDENT') and not self.check('EOF'):
             while self.check('NEWLINE'): self.consume()
             if self.check('DEDENT'): break
             body.append(self.parse_statement())
-            
         self.consume('DEDENT')
         node = While(condition, body)
         node.line = start_token.line
         return node
-        
     def parse_try(self) -> Try:
         start_token = self.consume('TRY')
         self.consume('NEWLINE')
         self.consume('INDENT')
-        
         try_body = []
         while not self.check('DEDENT') and not self.check('EOF'):
             while self.check('NEWLINE'): self.consume()
             if self.check('DEDENT'): break
             try_body.append(self.parse_statement())
         self.consume('DEDENT')
-        
         self.consume('CATCH')
         catch_var = self.consume('ID').value
         self.consume('NEWLINE')
         self.consume('INDENT')
-        
         catch_body = []
         while not self.check('DEDENT') and not self.check('EOF'):
             while self.check('NEWLINE'): self.consume()
             if self.check('DEDENT'): break
             catch_body.append(self.parse_statement())
         self.consume('DEDENT')
-        
         always_body = []
         if self.check('ALWAYS'):
             self.consume('ALWAYS')
@@ -1198,17 +964,14 @@ class Parser:
                 if self.check('DEDENT'): break
                 always_body.append(self.parse_statement())
             self.consume('DEDENT')
-        
         if always_body:
             node = TryAlways(try_body, catch_var, catch_body, always_body)
         else:
             node = Try(try_body, catch_var, catch_body)
         node.line = start_token.line
         return node
-
     def parse_list(self) -> Node:
         token = self.consume('LBRACKET')
-        
         def skip_formatted():
             while self.check('NEWLINE') or self.check('INDENT') or self.check('DEDENT'):
                 self.consume()
@@ -1218,37 +981,31 @@ class Parser:
             node = ListVal([])
             node.line = token.line
             return node
-        
         if self.check('DOTDOTDOT'):
              node = self._parse_list_with_spread(token)
              skip_formatted()
              return node
-        
         first_expr = self.parse_expression()
         skip_formatted()
-        
         if self.check('FOR'):
             self.consume('FOR')
             var_name = self.consume('ID').value
             self.consume('IN')
             iterable = self.parse_expression()
-            
             condition = None
             if self.check('IF'):
                 self.consume('IF')
                 condition = self.parse_expression()
-            
             self.consume('RBRACKET')
             node = ListComprehension(first_expr, var_name, iterable, condition)
             node.line = token.line
             return node
-        
         elements = [first_expr]
         while self.check('COMMA'):
             self.consume('COMMA')
             skip_formatted()
             if self.check('RBRACKET'):
-                break  # Trailing comma support
+                break  
             if self.check('DOTDOTDOT'):
                 self.consume('DOTDOTDOT')
                 spread_val = self.parse_expression()
@@ -1258,22 +1015,18 @@ class Parser:
             else:
                 elements.append(self.parse_expression())
             skip_formatted()
-        
         skip_formatted()
         self.consume('RBRACKET')
         node = ListVal(elements)
         node.line = token.line
         return node
-
     def _parse_list_with_spread(self, token: Token) -> ListVal:
-        """Parse list starting with spread operator"""
         elements = []
         self.consume('DOTDOTDOT')
         spread_val = self.parse_expression()
         spread_node = Spread(spread_val)
         spread_node.line = token.line
         elements.append(spread_node)
-        
         while self.check('COMMA'):
             self.consume('COMMA')
             if self.check('RBRACKET'):
@@ -1286,19 +1039,15 @@ class Parser:
                 elements.append(spread_node)
             else:
                 elements.append(self.parse_expression())
-        
         self.consume('RBRACKET')
         node = ListVal(elements)
         node.line = token.line
         return node
-
     def parse_dict(self) -> Dictionary:
         token = self.consume('LBRACE')
-        
         def skip_formatted():
             while self.check('NEWLINE') or self.check('INDENT') or self.check('DEDENT'):
                 self.consume()
-        
         skip_formatted()
         pairs = []
         if not self.check('RBRACE'):
@@ -1308,39 +1057,32 @@ class Parser:
                 key.line = key_token.line
             else:
                 key = self.parse_expression()
-                
             self.consume('COLON')
             skip_formatted()
             value = self.parse_expression()
             pairs.append((key, value))
             skip_formatted()
-            
             while self.check('COMMA'):
                 self.consume('COMMA')
                 skip_formatted()
                 if self.check('RBRACE'): break
-                
                 if self.check('ID') and self.peek(1).type == 'COLON':
                     key_token = self.consume('ID')
                     key = String(key_token.value)
                     key.line = key_token.line
                 else:
                     key = self.parse_expression()
-                    
                 self.consume('COLON')
                 skip_formatted()
                 value = self.parse_expression()
                 pairs.append((key, value))
                 skip_formatted()
-        
         skip_formatted()
         self.consume('RBRACE')
         node = Dictionary(pairs)
         node.line = token.line
         return node
-
     def parse_factor_simple(self) -> Node:
-        """Parse a simple factor (atomic) to be used as an argument."""
         token = self.peek()
         if token.type == 'NUMBER':
             self.consume()
@@ -1371,7 +1113,6 @@ class Parser:
                         if snippet:
                             sub_lexer = Lexer(snippet)
                             sub_tokens = sub_lexer.tokenize() 
-                            
                             sub_parser = Parser(sub_tokens)
                             try:
                                 expr = sub_parser.parse_expression()
@@ -1380,7 +1121,6 @@ class Parser:
                                 raise SyntaxError(f"Invalid interpolation expression: '{snippet}' on line {token.line}")
                         else:
                             continue
-                            
                     if current_node is None:
                         current_node = expr
                     else:
@@ -1435,12 +1175,9 @@ class Parser:
             node = Input(prompt)
             node.line = token.line
             return node
-        
         raise SyntaxError(f"Unexpected argument token {token.type} at line {token.line}")
-
     def parse_factor(self) -> Node:
         token = self.peek()
-        
         if token.type == 'NOT':
             op = self.consume()
             right = self.parse_factor() 
@@ -1482,7 +1219,7 @@ class Parser:
         elif token.type == 'LOAD' and self.peek(1).type == 'CSV':
              self.consume('LOAD')
              self.consume('CSV')
-             path = self.parse_factor() # argument
+             path = self.parse_factor() 
              node = CsvOp('load', None, path)
              node.line = token.line
              return node
@@ -1511,7 +1248,6 @@ class Parser:
              node = DateOp('today')
              node.line = token.line
              return node
-            
         if token.type == 'NUMBER':
             self.consume()
             val = token.value
@@ -1551,32 +1287,25 @@ class Parser:
                     return self._parse_natural_list()
                 elif self.peek(1).type == 'UNIQUE' and self.peek(2).type == 'SET' and self.peek(3).type == 'OF':
                     return self._parse_natural_set()
-            
             self.consume()
             instance_name = token.value
             method_name = None
-            
             if self.check('DOT'):
                 self.consume('DOT')
                 method_name = self.consume().value
-            
             args = []
             force_call = False
-            
             while True:
                 next_t = self.peek()
-                
                 if next_t.type == 'LPAREN' and self.peek(1).type == 'RPAREN':
                     self.consume('LPAREN')
                     self.consume('RPAREN')
                     force_call = True
                     continue
-
                 if next_t.type in ('NUMBER', 'STRING', 'REGEX', 'ID', 'LPAREN', 'INPUT', 'ASK', 'YES', 'NO', 'LBRACKET', 'LBRACE'):
                      args.append(self.parse_factor_simple())
                 else:
                     break
-                    
             if method_name:
                 if args or force_call:
                     node = MethodCall(instance_name, method_name, args)
@@ -1584,12 +1313,10 @@ class Parser:
                     node = PropertyAccess(instance_name, method_name)
                 node.line = token.line
                 return node
-            
             if args or force_call:
                 node = Call(instance_name, args)
                 node.line = token.line
                 return node
-                
             node = VarAccess(instance_name)
             node.line = token.line
             return node
@@ -1601,7 +1328,7 @@ class Parser:
         elif token.type == 'INPUT' or token.type == 'ASK':
             next_t = self.peek(1)
             if next_t.type in ('ID', 'TYPE', 'STRING', 'NAME', 'VALUE', 'CLASS', 'STYLE', 'ONCLICK', 'SRC', 'HREF', 'ACTION', 'METHOD'):
-                self.consume() # Consume INPUT token
+                self.consume() 
                 return self.parse_id_start_statement(passed_name_token=token)
             self.consume()
             prompt = None
@@ -1612,7 +1339,7 @@ class Parser:
             return node
         elif token.type == 'PROMPT':
             self.consume()
-            prompt_expr = self.parse_factor() # argument
+            prompt_expr = self.parse_factor() 
             node = Prompt(prompt_expr)
             node.line = token.line
             return node
@@ -1622,68 +1349,52 @@ class Parser:
             node = Confirm(prompt_expr)
             node.line = token.line
             return node
-        
         raise SyntaxError(f"Unexpected token {token.type} at line {token.line}")
-
     def parse_for(self) -> Node:
-        
         if self.check('LOOP'):
             start_token = self.consume('LOOP')
             count_expr = self.parse_expression()
             self.consume('TIMES')
-            
             self.consume('NEWLINE')
             self.consume('INDENT')
-            
             body = []
             while not self.check('DEDENT') and not self.check('EOF'):
                 while self.check('NEWLINE'): self.consume()
                 if self.check('DEDENT'): break
                 body.append(self.parse_statement())
-
             self.consume('DEDENT')
             node = For(count_expr, body)
             node.line = start_token.line
             return node
-        
         start_token = self.consume('FOR')
-        
         if self.check('ID') and self.peek(1).type == 'IN':
             var_name = self.consume('ID').value
             self.consume('IN')
-            
             if self.check('RANGE'):
                 self.consume('RANGE')
                 start_val = self.parse_expression()
                 end_val = self.parse_expression()
-                
                 self.consume('NEWLINE')
                 self.consume('INDENT')
-                
                 body = []
                 while not self.check('DEDENT') and not self.check('EOF'):
                     while self.check('NEWLINE'): self.consume()
                     if self.check('DEDENT'): break
                     body.append(self.parse_statement())
-                
                 self.consume('DEDENT')
-                
                 iterable = Call('range', [start_val, end_val])
                 node = ForIn(var_name, iterable, body)
                 node.line = start_token.line
                 return node
             else:
                 iterable = self.parse_expression()
-                
                 self.consume('NEWLINE')
                 self.consume('INDENT')
-                
                 body = []
                 while not self.check('DEDENT') and not self.check('EOF'):
                     while self.check('NEWLINE'): self.consume()
                     if self.check('DEDENT'): break
                     body.append(self.parse_statement())
-                
                 self.consume('DEDENT')
                 node = ForIn(var_name, iterable, body)
                 node.line = start_token.line
@@ -1692,51 +1403,39 @@ class Parser:
             count_expr = self.parse_expression()
             self.consume('IN')
             self.consume('RANGE')
-            
             self.consume('NEWLINE')
             self.consume('INDENT')
-            
             body = []
             while not self.check('DEDENT') and not self.check('EOF'):
                 while self.check('NEWLINE'): self.consume()
                 if self.check('DEDENT'): break
                 body.append(self.parse_statement())
-
             self.consume('DEDENT')
             node = For(count_expr, body)
             node.line = start_token.line
             return node
-
     def parse_expression_stmt(self) -> Node:
         expr = self.parse_expression()
         self.consume('NEWLINE')
         node = Print(expression=expr)
         node.line = expr.line
         return node
-
     def parse_expression(self) -> Node:
         if self.check('FN'):
             return self.parse_lambda()
-        
         return self.parse_ternary()
-
     def parse_lambda(self) -> Lambda:
         token = self.consume('FN')
         params = []
-        
         while self.check('ID'):
             params.append(self.consume('ID').value)
-        
         self.consume('ARROW')
         body = self.parse_expression()
-        
         node = Lambda(params, body)
         node.line = token.line
         return node
-
     def parse_ternary(self) -> Node:
         condition = self.parse_logic_or()
-        
         if self.check('QUESTION'):
             self.consume('QUESTION')
             true_expr = self.parse_expression()
@@ -1745,102 +1444,75 @@ class Parser:
             node = Ternary(condition, true_expr, false_expr)
             node.line = condition.line
             return node
-        
         return condition
-
     def parse_logic_or(self) -> Node:
         left = self.parse_logic_and()
-        
         while self.check('OR'):
             op_token = self.consume()
             right = self.parse_logic_and()
             new_node = BinOp(left, op_token.value, right)
             new_node.line = op_token.line
             left = new_node
-            
         return left
-
     def parse_logic_and(self) -> Node:
         left = self.parse_comparison()
-        
         while self.check('AND'):
             op_token = self.consume()
             right = self.parse_comparison()
             new_node = BinOp(left, op_token.value, right)
             new_node.line = op_token.line
             left = new_node
-            
         return left
-
     def parse_comparison(self) -> Node:
         left = self.parse_arithmetic()
-        
         if self.peek().type in ('EQ', 'NEQ', 'GT', 'LT', 'GE', 'LE', 'IS', 'MATCHES'):
             op_token = self.consume()
             op_val = op_token.value
             if op_token.type == 'IS':
-                op_val = '==' # Treat 'is' as equality
-                
+                op_val = '==' 
             right = self.parse_arithmetic()
             node = BinOp(left, op_val, right)
             node.line = op_token.line
             return node
-            
         return left
-
     def parse_arithmetic(self) -> Node:
         left = self.parse_term()
-        
         while self.peek().type in ('PLUS', 'MINUS'):
             op_token = self.consume()
             right = self.parse_term()
             new_node = BinOp(left, op_token.value, right)
             new_node.line = op_token.line
             left = new_node
-            
         return left
-
     def parse_term(self) -> Node:
         left = self.parse_factor()
-        
         while self.peek().type in ('MUL', 'DIV', 'MOD'):
             op_token = self.consume()
             right = self.parse_factor()
             new_node = BinOp(left, op_token.value, right)
             new_node.line = op_token.line
             left = new_node
-            
         return left
-
-
     def parse_convert(self) -> Convert:
-        """Parse: convert expr to json"""
         token = self.consume('CONVERT')
-        expr = self.parse_factor() # parse simple factor or expression? 'convert data' - data is factor.
-        
+        expr = self.parse_factor() 
         self.consume('TO')
-        
         target_format = 'json'
         if self.check('JSON'):
              self.consume('JSON')
         elif self.check('ID'):
              target_format = self.consume('ID').value
-             
         node = Convert(expr, target_format)
         node.line = token.line
         return node
-
     def parse_download(self) -> Download:
-        """Parse: download 'url'"""
         token = self.consume('DOWNLOAD')
         url = self.parse_expression()
         self.consume('NEWLINE')
         node = Download(url)
         node.line = token.line
         return node
-
     def parse_archive(self) -> ArchiveOp:
-        """Parse: compress folder 'x' to 'y' / extract 'x' to 'y'"""
         op = None
         token = None
         if self.check('COMPRESS'):
@@ -1850,18 +1522,14 @@ class Parser:
         else:
             token = self.consume('EXTRACT')
             op = 'extract'
-            
         source = self.parse_expression()
         self.consume('TO')
         target = self.parse_expression()
         self.consume('NEWLINE')
-        
         node = ArchiveOp(op, source, target)
         node.line = token.line
         return node
-
     def parse_csv_load(self) -> CsvOp:
-        """Parse: load csv 'path'"""
         token = self.consume('LOAD')
         self.consume('CSV')
         path = self.parse_expression()
@@ -1869,9 +1537,7 @@ class Parser:
         node = CsvOp('load', None, path)
         node.line = token.line
         return node
-        
     def parse_csv_save(self) -> CsvOp:
-         """Parse: save expr to csv 'path'"""
          token = self.consume('SAVE')
          data = self.parse_expression()
          self.consume('TO')
@@ -1881,9 +1547,7 @@ class Parser:
          node = CsvOp('save', data, path)
          node.line = token.line
          return node
-
     def parse_clipboard(self) -> Node:
-        """Parse: copy expr to clipboard OR paste from clipboard"""
         if self.check('COPY'):
             token = self.consume('COPY')
             content = self.parse_expression()
@@ -1901,9 +1565,7 @@ class Parser:
              node = ClipboardOp('paste', None)
              node.line = token.line
              return node
-
     def parse_automation(self) -> AutomationOp:
-         """Parse: press 'x', type 'x', click at x, y, notify 't' 'b'"""
          if self.check('PRESS'):
              token = self.consume('PRESS')
              keys = self.parse_expression()
@@ -1918,7 +1580,7 @@ class Parser:
              token = self.consume('CLICK')
              self.consume('AT')
              x = self.parse_expression()
-             if self.check('COMMA'): self.consume('COMMA') # optional
+             if self.check('COMMA'): self.consume('COMMA') 
              y = self.parse_expression()
              self.consume('NEWLINE')
              return AutomationOp('click', [x, y])
@@ -1928,9 +1590,7 @@ class Parser:
              msg = self.parse_expression()
              self.consume('NEWLINE')
              return AutomationOp('notify', [title, msg])
-
     def parse_write(self) -> FileWrite:
-        """Parse: write 'text' to file 'path'"""
         token = self.consume('WRITE')
         content = self.parse_expression()
         self.consume('TO')
@@ -1940,9 +1600,7 @@ class Parser:
         node = FileWrite(path, content, 'w')
         node.line = token.line
         return node
-
     def parse_append(self) -> FileWrite:
-        """Parse: append 'text' to file 'path'"""
         token = self.consume('APPEND')
         content = self.parse_expression()
         self.consume('TO')
@@ -1952,4 +1610,3 @@ class Parser:
         node = FileWrite(path, content, 'a')
         node.line = token.line
         return node
-

@@ -16,68 +16,53 @@ import threading
 import concurrent.futures
 import tkinter as tk
 from tkinter import messagebox, simpledialog
-
-
 class ReturnException(Exception):
     def __init__(self, value):
         self.value = value
-
 class StopException(Exception):
     pass
-
 class SkipException(Exception):
     pass
-
 class ShellLiteError(Exception):
     def __init__(self, message):
         self.message = message
         super().__init__(message)
-
 class Environment:
     def __init__(self, parent=None):
         self.variables: Dict[str, Any] = {}
         self.constants: set = set()
         self.parent = parent
-
     def get(self, name: str) -> Any:
         if name in self.variables:
             return self.variables[name]
         if self.parent:
             return self.parent.get(name)
         raise NameError(f"Variable '{name}' is not defined.")
-
     def set(self, name: str, value: Any):
         if name in self.constants:
             raise RuntimeError(f"Cannot reassign constant '{name}'")
         if self.parent and name in self.parent.constants:
             raise RuntimeError(f"Cannot reassign constant '{name}'")
         self.variables[name] = value
-
     def set_const(self, name: str, value: Any):
         if name in self.variables:
             raise RuntimeError(f"Constant '{name}' already declared")
         self.variables[name] = value
         self.constants.add(name)
-
-
 class Instance:
     def __init__(self, class_def: Any):
         self.class_def = class_def
         self.data: Dict[str, Any] = {}
-
 class Tag:
-    """HTML Tag Builder"""
     def __init__(self, name: str, attrs: Dict[str, Any] = None):
         self.name = name
         self.attrs = attrs or {}
         self.children: List[Any] = []
-        
     def add(self, child):
         if isinstance(child, Tag):
              if any(c is child for c in self.children):
                  return
         self.children.append(child)
-        
     def __str__(self):
         attr_str = ""
         for k, v in self.attrs.items():
@@ -88,27 +73,20 @@ class Tag:
         if self.name in ('img', 'br', 'hr', 'input', 'meta', 'link'):
             return f"<{self.name}{attr_str} />"
         return f"<{self.name}{attr_str}>{inner}</{self.name}>"
-
 class WebBuilder:
-    """Context manager for nested tags"""
     def __init__(self, interpreter=None):
         self.stack: List[Tag] = []
         self.interpreter = interpreter
-        
     def push(self, tag: Tag):
         if self.stack:
             self.stack[-1].add(tag)
         self.stack.append(tag)
-        
     def pop(self):
         if not self.stack: return None
         return self.stack.pop()
-        
     def add_text(self, text: str):
         if self.stack:
             self.stack[-1].add(text)
-
-
 def slang_run(cmd):
     try:
         result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
@@ -117,14 +95,12 @@ def slang_run(cmd):
         return result.stdout.strip()
     except Exception as e:
         raise RuntimeError(f"Failed to run command: {e}")
-
 def slang_read(path):
     try:
         with open(path, 'r', encoding='utf-8') as f:
             return f.read()
     except Exception as e:
         raise RuntimeError(f"Failed to read file '{path}': {e}")
-        
 def slang_write(path, content):
     try:
         with open(path, 'w', encoding='utf-8') as f:
@@ -132,13 +108,11 @@ def slang_write(path, content):
         return True
     except Exception as e:
         raise RuntimeError(f"Failed to write file '{path}': {e}")
-        
 def slang_json_parse(json_str):
     try:
         return json.loads(json_str)
     except Exception as e:
         raise RuntimeError(f"Invalid JSON: {e}")
-        
 def slang_json_stringify(obj):
     try:
         if isinstance(obj, Instance):
@@ -146,14 +120,12 @@ def slang_json_stringify(obj):
         return json.dumps(obj)
     except Exception as e:
         raise RuntimeError(f"JSON stringify failed: {e}")
-
 def slang_http_get(url):
     try:
         with urllib.request.urlopen(url) as response:
             return response.read().decode('utf-8')
     except Exception as e:
         raise RuntimeError(f"HTTP GET failed for '{url}': {e}")
-        
 def slang_http_post(url, data_dict):
     try:
         if isinstance(data_dict, Instance):
@@ -164,7 +136,6 @@ def slang_http_post(url, data_dict):
              return response.read().decode('utf-8')
     except Exception as e:
         raise RuntimeError(f"HTTP POST failed for '{url}': {e}")
-
 def slang_download(url):
     filename = url.split('/')[-1] or "downloaded_file"
     try:
@@ -174,7 +145,6 @@ def slang_download(url):
         return filename
     except Exception as e:
         raise RuntimeError(f"Download failed: {e}")
-
 def slang_archive(op, source, target):
     try:
         if op == 'compress':
@@ -188,13 +158,11 @@ def slang_archive(op, source, target):
                 zipf.extractall(target)
     except Exception as e:
         raise RuntimeError(f"Archive operation failed: {e}")
-
 def slang_csv_load(path):
     import csv
     with open(path, 'r', newline='') as f:
         reader = csv.DictReader(f)
         return [row for row in reader]
-
 def slang_csv_save(data, path):
     import csv
     if not isinstance(data, list): data = [data]
@@ -209,46 +177,39 @@ def slang_csv_save(data, path):
             writer = csv.DictWriter(f, fieldnames=keys)
             writer.writeheader()
             writer.writerows(rows)
-
 def slang_clipboard_copy(text):
     try:
         import pyperclip
         pyperclip.copy(str(text))
     except ImportError:
         pass
-
 def slang_clipboard_paste():
     try:
         import pyperclip
         return pyperclip.paste()
     except ImportError:
         return ""
-
 def slang_press(key):
     try:
         import keyboard
         keyboard.press_and_release(key)
     except ImportError: pass
-
 def slang_type(text):
     try:
         import keyboard
         keyboard.write(str(text))
     except ImportError: pass
-
 def slang_click(x, y):
     try:
         import mouse
         mouse.move(x, y, absolute=True, duration=0.2)
         mouse.click('left')
     except ImportError: pass
-
 def slang_notify(title, msg):
     try:
         from plyer import notification
         notification.notify(title=str(title), message=str(msg))
     except ImportError: pass
-
 def slang_date_parse(expr):
     from datetime import datetime, timedelta
     today = datetime.now()
@@ -265,15 +226,12 @@ def slang_date_parse(expr):
             if days_ahead <= 0: days_ahead += 7
             return (today + timedelta(days=days_ahead)).strftime("%Y-%m-%d")
     return s
-
 def slang_file_write(path, content, mode):
     with open(path, mode, encoding='utf-8') as f:
         f.write(str(content))
-
 def slang_file_read(path):
     with open(path, 'r', encoding='utf-8') as f:
         return f.read()
-
 import sqlite3
 _slang_db_conn = None
 def slang_db_open(path):
@@ -281,31 +239,26 @@ def slang_db_open(path):
     _slang_db_conn = sqlite3.connect(path, check_same_thread=False)
     _slang_db_conn.row_factory = lambda c, r: {col[0]: r[idx] for idx, col in enumerate(c.description)}
     return True
-
 def slang_db_close():
     global _slang_db_conn
     if _slang_db_conn: _slang_db_conn.close(); _slang_db_conn = None
-
 def slang_db_exec(sql, params=None):
     if not _slang_db_conn: raise RuntimeError("DB not open")
     if params is None: params = []
     c = _slang_db_conn.cursor(); c.execute(sql, params); _slang_db_conn.commit()
     return c.lastrowid
-
 def slang_db_query(sql, params=None):
     if not _slang_db_conn: raise RuntimeError("DB not open")
     if params is None: params = []
     c = _slang_db_conn.cursor(); c.execute(sql, params)
     return c.fetchall()
-
 def slang_json_stringify(val):
-    if isinstance(val, (Instance, dict)): # Instance or dict
+    if isinstance(val, (Instance, dict)): 
         d = val.data if isinstance(val, Instance) else val
         return json.dumps(d)
     if isinstance(val, list):
          return json.dumps([v.data if isinstance(v, Instance) else v for v in val])
     return json.dumps(val)
-
 def slang_color_print(val, color=None, style=None):
     colors = {'red': '91', 'green': '92', 'yellow': '93', 'blue': '94', 'magenta': '95', 'cyan': '96'}
     parts = []
@@ -315,14 +268,12 @@ def slang_color_print(val, color=None, style=None):
         print(f"\033[{';'.join(parts)}m{val}\033[0m")
     else:
         print(val)
-
 def slang_alert(msg):
     root = tk.Tk()
     root.withdraw()
     root.attributes('-topmost', True)
     messagebox.showinfo("Alert", str(msg))
     root.destroy()
-
 def slang_prompt(prompt):
     root = tk.Tk()
     root.withdraw()
@@ -330,7 +281,6 @@ def slang_prompt(prompt):
     val = simpledialog.askstring("Input", str(prompt))
     root.destroy()
     return val if val is not None else ""
-
 def slang_confirm(prompt):
     root = tk.Tk()
     root.withdraw()
@@ -338,8 +288,6 @@ def slang_confirm(prompt):
     val = messagebox.askyesno("Confirm", str(prompt))
     root.destroy()
     return val
-
-
 def get_std_modules():
     return {
         'math': {
@@ -390,46 +338,37 @@ def get_std_modules():
             'split': lambda p, s: re.split(p, s),
         },
     }
-
-
 def slang_map(lst, func):
     if callable(func):
         return [func(x) for x in lst]
     raise TypeError("map requires a callable")
-
 def slang_filter(lst, func):
     if callable(func):
         return [x for x in lst if func(x)]
     raise TypeError("filter requires a callable")
-
 def slang_reduce(lst, func, initial=None):
     if callable(func):
         if initial is not None:
             return functools.reduce(func, lst, initial)
         return functools.reduce(func, lst)
     raise TypeError("reduce requires a callable")
-
 def slang_push(lst, item):
     lst.append(item)
     return None
-
 def get_builtins():
     return {
         'str': str, 'int': int, 'float': float, 'bool': bool,
         'list': list, 'len': len,
         'range': lambda *args: list(range(*args)),
         'typeof': lambda x: type(x).__name__,
-        
         'run': slang_run,
         'read': slang_read,
         'write': slang_write,
         'json_parse': slang_json_parse,
         'json_stringify': slang_json_stringify,
         'print': print,
-
         'abs': abs, 'min': min, 'max': max,
         'round': round, 'pow': pow, 'sum': sum,
-        
         'split': lambda s, d=" ": s.split(d),
         'join': lambda lst, d="": d.join(str(x) for x in lst),
         'replace': lambda s, old, new: s.replace(old, new),
@@ -440,7 +379,6 @@ def get_builtins():
         'endswith': lambda s, p: s.endswith(p),
         'find': lambda s, sub: s.find(sub),
         'char': chr, 'ord': ord,
-        
         'append': lambda l, x: (l.append(x), l)[1],
         'push': slang_push,
         'count': len, 
@@ -453,21 +391,17 @@ def get_builtins():
         'slice': lambda l, start, end=None: l[start:end],
         'contains': lambda l, x: x in l,
         'index': lambda l, x: l.index(x) if x in l else -1,
-        
         'map': slang_map,
         'filter': slang_filter,
         'reduce': slang_reduce,
-        
         'exists': os.path.exists,
         'delete': os.remove,
         'copy': shutil.copy,
         'rename': os.rename,
         'mkdir': lambda p: os.makedirs(p, exist_ok=True),
         'listdir': os.listdir,
-        
         'http_get': slang_http_get,
         'http_post': slang_http_post,
-        
         'random': random.random,
         'randint': random.randint,
         'sleep': time.sleep,
@@ -486,6 +420,5 @@ def get_builtins():
         'confirm': slang_confirm,
         'Set': set,
         'show': print,
-
         'say': print,
     }

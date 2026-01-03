@@ -1324,9 +1324,12 @@ class Interpreter:
                             self.wfile.write(str(e).encode())
                     except: pass
         server = HTTPServer(('0.0.0.0', port_val), ShellLiteHandler)
-        print(f"ShellLite Server running on port {port_val}...")
+        print(f"\n  ShellLite Server v0.03.4 is running!")
+        print(f"  \u001b[1;36m➜\u001b[0m  Local:   \u001b[1;4;36mhttp://localhost:{port_val}/\u001b[0m\n")
         try: server.serve_forever()
-        except KeyboardInterrupt: pass
+        except KeyboardInterrupt: 
+            print("\n  Server stopped.")
+            pass
     def visit_DatabaseOp(self, node: DatabaseOp):
         if node.op == 'open':
             path = self.visit(node.args[0])

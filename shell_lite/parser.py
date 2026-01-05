@@ -32,6 +32,8 @@ class Parser:
     def parse_statement(self) -> Node:
         if self.check('USE'):
             return self.parse_import()
+        elif self.check('APP'):
+            return self.parse_app()
         elif self.check('ON'):
             return self.parse_on()
         elif self.check('CONST'):
@@ -933,6 +935,23 @@ class Parser:
         return Assign(name, value)
     def parse_import(self) -> Node:
         token = self.consume('USE')
+        
+        # Check for Python Import: use python "numpy" as np
+        if self.check('ID') and self.peek().value == 'python':
+             self.consume('ID') # consume 'python'
+             if self.check('STRING'):
+                 module_name = self.consume('STRING').value
+                 alias = None
+                 if self.check('AS'):
+                     self.consume('AS')
+                     alias = self.consume('ID').value
+                 self.consume('NEWLINE')
+                 node = PythonImport(module_name, alias)
+                 node.line = token.line
+                 return node
+             else:
+                 raise SyntaxError(f"Expected module name string after 'use python' at line {token.line}")
+
         if self.check('STRING'):
             path = self.consume('STRING').value
         else:
@@ -1163,6 +1182,70 @@ class Parser:
         node = Dictionary(pairs)
         node.line = token.line
         return node
+    def parse_app(self) -> Node:
+        token = self.consume('APP')
+        title = self.consume('STRING').value
+        
+        width = 500
+        height = 400
+        if self.check('SIZE'):
+            self.consume('SIZE')
+            width = int(self.consume('NUMBER').value)
+            height = int(self.consume('NUMBER').value)
+        
+        self.consume('COLON')
+        self.consume('NEWLINE')
+        self.consume('INDENT')
+        
+        body = []
+        while not self.check('DEDENT'):
+            body.append(self.parse_ui_block())
+            if self.check('NEWLINE'):
+                self.consume('NEWLINE')
+        
+        self.consume('DEDENT')
+        return App(title, width, height, body)
+
+    def parse_ui_block(self) -> Node:
+        token = self.peek()
+        
+        if token.type in ('COLUMN', 'ROW'):
+            layout_type = self.consume().value # column or row
+            self.consume('COLON')
+            self.consume('NEWLINE')
+            self.consume('INDENT')
+            children = []
+            while not self.check('DEDENT'):
+               children.append(self.parse_ui_block())
+               if self.check('NEWLINE'): self.consume('NEWLINE')
+            self.consume('DEDENT')
+            return Layout(layout_type, children)
+            
+        elif token.type in ('BUTTON', 'INPUT', 'HEADING', 'TEXT'):
+            widget_type = self.consume().value
+            label = self.consume('STRING').value
+            
+            var_name = None
+            if self.check('AS'):
+                self.consume('AS')
+                var_name = self.consume('ID').value
+                
+            event_handler = None
+            if token.type == 'BUTTON' and self.check('DO'):
+                self.consume('DO')
+                self.consume('COLON')
+                self.consume('NEWLINE')
+                self.consume('INDENT')
+                event_handler = []
+                while not self.check('DEDENT'):
+                    event_handler.append(self.parse_statement())
+                self.consume('DEDENT')
+            
+            return Widget(widget_type, label, var_name, event_handler)
+            
+        else:
+            raise SyntaxError(f"Unexpected token in UI block: {token.type} at line {token.line}")
+
     def parse_factor_simple(self) -> Node:
         token = self.peek()
         if token.type == 'NUMBER':

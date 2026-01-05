@@ -223,6 +223,9 @@ class Lexer:
                         'count': 'COUNT', 'many': 'MANY', 'how': 'HOW',
                         'field': 'FIELD', 'submit': 'SUBMIT', 'named': 'NAMED',
                         'placeholder': 'PLACEHOLDER',
+                        'app': 'APP', 'title': 'TITLE', 'size': 'SIZE',
+                        'column': 'COLUMN', 'row': 'ROW',
+                        'button': 'BUTTON', 'heading': 'HEADING', 'text': 'TEXT',
                     }
                     token_type = keywords.get(value, 'ID')
                     self.tokens.append(Token(token_type, value, self.line_number, current_col))

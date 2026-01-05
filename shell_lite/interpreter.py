@@ -2,6 +2,7 @@ from typing import Any, Dict, List, Callable
 from .ast_nodes import *
 from .lexer import Token, Lexer
 from .parser import Parser
+import importlib
 import operator
 import re
 import os
@@ -717,15 +718,39 @@ class Interpreter:
         return ret_val
     def visit_PropertyAccess(self, node: PropertyAccess):
         instance = self.current_env.get(node.instance_name)
+        
+        # 1. ShellLite Instance
         if isinstance(instance, Instance):
             if node.property_name not in instance.data:
-                raise AttributeError(f"Structure '{instance.class_def.name}' has no property '{node.property_name}'")
+                 # Check for methods? PropertyAccess usually implies data.
+                 # But in some cases we might want method reference?
+                 raise AttributeError(f"Structure '{instance.class_def.name}' has no property '{node.property_name}'")
             return instance.data[node.property_name]
+            
+        # 2. Dictionary
         elif isinstance(instance, dict):
              if node.property_name in instance:
                  return instance[node.property_name]
              raise AttributeError(f"Dictionary has no key '{node.property_name}'")
-        raise TypeError(f"'{node.instance_name}' is not a structure instance or dictionary.")
+
+        # 3. List
+        elif isinstance(instance, list):
+             if node.property_name == 'length':
+                 return len(instance)
+        
+        # 4. String
+        elif isinstance(instance, str):
+             if node.property_name == 'length':
+                 return len(instance)
+
+        # 5. Python Object / Module Interop
+        # If the instance has the attribute natively, return it.
+        # This handles 'math.pi', 'os.name', etc.
+        if hasattr(instance, node.property_name):
+             return getattr(instance, node.property_name)
+             
+        raise TypeError(f"Object '{node.instance_name}' (type {type(instance).__name__}) has no property '{node.property_name}'")
+
     def visit_Import(self, node: Import):
         if node.path in self.std_modules:
             self.current_env.set(node.path, self.std_modules[node.path])
@@ -977,6 +1002,14 @@ class Interpreter:
         raise StopException()
     def visit_Skip(self, node: Skip):
         raise SkipException()
+    def visit_PythonImport(self, node: PythonImport):
+        try:
+            mod = importlib.import_module(node.module_name)
+            name = node.alias if node.alias else node.module_name.split('.')[0]
+            self.global_env.set(name, mod)
+        except ImportError as e:
+            raise RuntimeError(f"Could not import python module '{node.module_name}': {e}")
+            
     def visit_Throw(self, node: Throw):
         message = self.visit(node.message)
         raise ShellLiteError(str(message))
@@ -1115,8 +1148,124 @@ class Interpreter:
         code = 0
         if node.code:
             code = self.visit(node.code)
-        import sys
-        sys.exit(code)
+            sys.exit(int(code))
+        sys.exit(0)
+
+    # -------------------------------------------------------------------------
+    # Project Polaris: Phase 2 (The Canvas - Native UI)
+    # -------------------------------------------------------------------------
+    def visit_App(self, node: App):
+        # We need a root for the app
+        import tkinter as tk
+        from tkinter import messagebox
+        root = tk.Tk()
+        root.title(node.title)
+        root.geometry(f"{node.width}x{node.height}")
+        
+        # Store root for potential access, though mostly we use 'master' passed down
+        # Ideally we pass 'parent' to visits, but we don't have that signature.
+        # So we'll use a stack or a temporary context.
+        self.ui_parent_stack = [root]
+        
+        # Define a helpful alert function available in UI context
+        def ui_alert(msg):
+            messagebox.showinfo("Message", str(msg))
+        self.current_env.set("alert", ui_alert)
+
+        try:
+            for child in node.body:
+                self.visit(child)
+        finally:
+            self.ui_parent_stack.pop()
+            
+        root.mainloop()
+
+    def visit_Layout(self, node: Layout):
+        parent = self.ui_parent_stack[-1]
+        
+        # Create a frame for the layout
+        frame = tk.Frame(parent)
+        
+        # Pack options based on layout type of THIS container relative to parent??
+        # Usually Layout implies how CHILDREN are arranged.
+        # But here 'column' means "I am a column" -> children stacked vertically.
+        # 'row' means "I am a row" -> children stacked horizontally.
+        
+        # In Tkinter, pack() defaults to vertical (column).
+        # side=LEFT makes it horizontal (row).
+        
+        # We start by adding the frame to the parent.
+        # If parent is a Column, we pack(side=TOP). If Row, pack(side=LEFT).
+        # But simplified: Just use pack(fill=X) or something.
+        frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True, padx=5, pady=5)
+        
+        self.ui_parent_stack.append((frame, node.layout_type))
+        try:
+            for child in node.body:
+                self.visit(child)
+        finally:
+            self.ui_parent_stack.pop()
+
+    def visit_Widget(self, node: Widget):
+        from tkinter import messagebox
+        parent_ctx = self.ui_parent_stack[-1]
+        if isinstance(parent_ctx, tuple):
+            parent, layout_mode = parent_ctx
+        else:
+            parent = parent_ctx
+            layout_mode = 'column' # Default to column
+            
+        widget = None
+        if node.widget_type == 'button':
+            # Handle event
+            def on_click():
+                if node.event_handler:
+                    try:
+                        for stmt in node.event_handler:
+                            self.visit(stmt)
+                    except Exception as e:
+                        messagebox.showerror("Error", str(e))
+                        
+            widget = tk.Button(parent, text=node.label, command=on_click)
+            
+        elif node.widget_type == 'input':
+            lbl = tk.Label(parent, text=node.label)
+            pack_opts = {'side': tk.TOP, 'anchor': 'w'} if layout_mode == 'column' else {'side': tk.LEFT}
+            lbl.pack(**pack_opts)
+            
+            widget = tk.Entry(parent)
+            
+            # Store accessor in Env so we can read .value
+            if node.var_name:
+                # We can't store the widget directly because .value access visits PropertyAccess
+                # which expects dict, list, or python object.
+                # Tkinter Entry has get().
+                # We wrap it or just rely on 'visit_PropertyAccess' (Phase 1)
+                # By default Tkinter widgets store config. 
+                # Let's verify if widget.value works natively? No.
+                # So we wrap it.
+                class InputWrapper:
+                    def __init__(self, w): self.w = w
+                    @property
+                    def value(self): return self.w.get()
+                    @property
+                    def text(self): return self.w.get()
+                
+                self.current_env.set(node.var_name, InputWrapper(widget))
+
+        elif node.widget_type == 'heading':
+            widget = tk.Label(parent, text=node.label, font=("Helvetica", 16, "bold"))
+            
+        elif node.widget_type == 'text':
+            widget = tk.Label(parent, text=node.label)
+            
+        if widget:
+            # Layout the widget
+            if layout_mode == 'column':
+                widget.pack(side=tk.TOP, pady=5, fill=tk.X)
+            else:
+                widget.pack(side=tk.LEFT, padx=5)
+
     def visit_Make(self, node: Make):
         if node.class_name not in self.classes:
             raise NameError(f"Thing '{node.class_name}' not defined.")

@@ -301,12 +301,25 @@ class Parser:
         node.line = token.line
         return node
     def parse_make(self) -> Node:
+        node = self.parse_make_expr()
+        self.consume('NEWLINE')
+        return node
+
+    def parse_make_expr(self) -> Make:
         token = self.consume('MAKE')
         class_name = self.consume('ID').value
         args = []
-        while not self.check('NEWLINE') and not self.check('EOF'):
-            args.append(self.parse_expression())
-        self.consume('NEWLINE')
+        if self.check('LPAREN'):
+            self.consume('LPAREN')
+            if not self.check('RPAREN'):
+                args.append(self.parse_expression())
+                while self.check('COMMA'):
+                    self.consume('COMMA')
+                    args.append(self.parse_expression())
+            self.consume('RPAREN')
+        else:
+            while not self.check('NEWLINE') and not self.check('EOF'):
+                args.append(self.parse_expression())
         node = Make(class_name, args)
         node.line = token.line
         return node
@@ -501,7 +514,10 @@ class Parser:
         start_token = self.consume('STRUCTURE')
         name = self.consume('ID').value
         parent = None
-        if self.check('LPAREN'):
+        if self.check('EXTENDS'):
+            self.consume('EXTENDS')
+            parent = self.consume('ID').value
+        elif self.check('LPAREN'):
             self.consume('LPAREN')
             parent = self.consume('ID').value
             self.consume('RPAREN')
@@ -527,6 +543,14 @@ class Parser:
                 self.consume('NEWLINE')
             elif self.check('TO'):
                 methods.append(self.parse_function_def())
+            elif self.check('ID'):
+                prop_name = self.consume('ID').value
+                default_val = None
+                if self.check('ASSIGN'):
+                    self.consume('ASSIGN')
+                    default_val = self.parse_expression()
+                properties.append((prop_name, default_val))
+                self.consume('NEWLINE')
             elif self.check('NEWLINE'):
                 self.consume()
             else:
@@ -608,6 +632,22 @@ class Parser:
                 node = Assign(name, value)
                 node.line = token_is.line
                 return node
+        elif self.check('LBRACKET'):
+             self.consume('LBRACKET')
+             index = self.parse_expression()
+             self.consume('RBRACKET')
+             self.consume('ASSIGN')
+             val = self.parse_expression()
+             self.consume('NEWLINE')
+             # Convert simple assignment to PropertyAssign-like or specific set call?
+             # interpreter.visit_IndexAccess handles get.
+             # We need a node for IndexAssign. parser snippet doesn't show one.
+             # But visit_PropertyAssign handles dict keys. 
+             # Let's map d[k] = v to PropertyAssign(d, k, v)? 
+             # No, PropertyAssign takes member name as string. Here index handles expressions.
+             # I need to check if there is a node for this. 
+             # If not, I'll return Call('set', [VarAccess(name), index, val])
+             return Call('set', [VarAccess(name), index, val])
         elif self.check('DOT'):
             self.consume('DOT')
             member_token = self.consume()
@@ -617,13 +657,40 @@ class Parser:
                 value = self.parse_expression()
                 self.consume('NEWLINE')
                 return PropertyAssign(name, member, value)
+            
             args = []
+            if self.check('LPAREN'):
+                 self.consume('LPAREN')
+                 if not self.check('RPAREN'):
+                     args.append(self.parse_expression())
+                     while self.check('COMMA'):
+                         self.consume('COMMA')
+                         args.append(self.parse_expression())
+                 self.consume('RPAREN')
+                 self.consume('NEWLINE')
+                 node = MethodCall(name, member, args)
+                 node.line = name_token.line
+                 return node
+
             while not self.check('NEWLINE') and not self.check('EOF'):
                 args.append(self.parse_expression())
             self.consume('NEWLINE')
             node = MethodCall(name, member, args)
             node.line = name_token.line
             return node
+        elif self.check('LPAREN'):
+             self.consume('LPAREN')
+             args = []
+             if not self.check('RPAREN'):
+                 args.append(self.parse_expression())
+                 while self.check('COMMA'):
+                     self.consume('COMMA')
+                     args.append(self.parse_expression())
+             self.consume('RPAREN')
+             self.consume('NEWLINE')
+             node = Call(name, args)
+             node.line = name_token.line
+             return node
         else:
             if not self.check('NEWLINE') and not self.check('EOF') and not self.check('EQ') and not self.check('IS'):
                 args = []
@@ -866,7 +933,10 @@ class Parser:
         return Assign(name, value)
     def parse_import(self) -> Node:
         token = self.consume('USE')
-        path = self.consume('STRING').value
+        if self.check('STRING'):
+            path = self.consume('STRING').value
+        else:
+             path = self.consume('ID').value
         if self.check('AS'):
             self.consume('AS')
             alias = self.consume('ID').value
@@ -1189,12 +1259,23 @@ class Parser:
         raise SyntaxError(f"Unexpected argument token {token.type} at line {token.line}")
     def parse_factor(self) -> Node:
         token = self.peek()
-        if token.type == 'NOT':
+        if token.type == 'MINUS':
             op = self.consume()
-            right = self.parse_factor() 
-            node = UnaryOp(op.value, right)
+            right = self.parse_factor()
+            node = UnaryOp('-', right)
             node.line = op.line
             return node
+        elif token.type == 'NOT':
+             op = self.consume()
+             right = self.parse_factor()
+             node = UnaryOp('not', right)
+             node.line = op.line
+             return node
+        elif token.type == 'LPAREN':
+             self.consume('LPAREN')
+             node = self.parse_expression()
+             self.consume('RPAREN')
+             return node
         elif token.type == 'DB':
             return self.parse_db_op()
         elif token.type == 'SPAWN':
@@ -1274,10 +1355,7 @@ class Parser:
             node.line = token.line
             return node
         elif token.type == 'STRING':
-            self.consume()
-            node = String(token.value)
-            node.line = token.line
-            return node
+            return self.parse_factor_simple()
         elif token.type == 'YES':
             self.consume()
             node = Boolean(True)
@@ -1304,30 +1382,60 @@ class Parser:
             if self.check('DOT'):
                 self.consume('DOT')
                 method_name = self.consume().value
+            
             args = []
+            # Check for C-style function call: func(arg1, arg2)
+            if self.check('LPAREN'):
+                self.consume('LPAREN')
+                if not self.check('RPAREN'):
+                    args.append(self.parse_expression())
+                    while self.check('COMMA'):
+                        self.consume('COMMA')
+                        args.append(self.parse_expression())
+                self.consume('RPAREN')
+                if method_name:
+                    node = MethodCall(instance_name, method_name, args)
+                else:
+                    node = Call(instance_name, args)
+                node.line = token.line
+                return node
+
+            # Fallback to command-style arguments: func arg1 arg2
+            # But only if NOT a property access (method_name w/o args is property access, 
+            # but if it was method call it would use parens ideally, or spaces?)
+            # Existing logic supported 'func arg1 arg2'.
+            # We keep it for backward compatibility e.g. 'echo 123'.
+            
             force_call = False
             while True:
                 next_t = self.peek()
-                if next_t.type == 'LPAREN' and self.peek(1).type == 'RPAREN':
-                    self.consume('LPAREN')
-                    self.consume('RPAREN')
-                    force_call = True
-                    continue
-                if next_t.type in ('NUMBER', 'STRING', 'REGEX', 'ID', 'LPAREN', 'INPUT', 'ASK', 'YES', 'NO', 'LBRACKET', 'LBRACE'):
-                     args.append(self.parse_factor_simple())
-                else:
+                # If we see LPAREN now, it's ambiguous if we didn't handle it above.
+                # But 'func (1)' is func called with 1 arg which is (1).
+                # 'func (1, 2)' would fail in old logic too.
+                # So the above block handles the explicit invocation.
+                # This loop is for 'func 1 2'.
+                
+                # Check for keywords or invalid start tokens
+                if next_t.type not in ('NUMBER', 'STRING', 'REGEX', 'ID', 'LPAREN', 'INPUT', 'ASK', 'YES', 'NO', 'LBRACKET', 'LBRACE'):
                     break
+                
+                # Special case: if we see LPAREN, is it part of command args?
+                # e.g. 'func (1+2)' -> args=[(1+2)].
+                args.append(self.parse_factor_simple())
+
             if method_name:
-                if args or force_call:
+                if args:
                     node = MethodCall(instance_name, method_name, args)
                 else:
                     node = PropertyAccess(instance_name, method_name)
                 node.line = token.line
                 return node
-            if args or force_call:
+            
+            if args:
                 node = Call(instance_name, args)
                 node.line = token.line
                 return node
+
             node = VarAccess(instance_name)
             node.line = token.line
             return node
@@ -1360,6 +1468,8 @@ class Parser:
             node = Confirm(prompt_expr)
             node.line = token.line
             return node
+        elif token.type == 'MAKE':
+            return self.parse_make_expr()
         raise SyntaxError(f"Unexpected token {token.type} at line {token.line}")
     def parse_for(self) -> Node:
         if self.check('LOOP'):

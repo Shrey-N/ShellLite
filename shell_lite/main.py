@@ -61,7 +61,7 @@ def run_repl():
     print("\n" + "="*40)
     print("  ShellLite REPL - English Syntax")
     print("="*40)
-    print("Version: v0.04.0 | Made by Shrey Naithani")
+    print("Version: v0.04.1 | Made by Shrey Naithani")
     print("Commands: Type 'exit' to quit, 'help' for examples.")
     print("Note: Terminal commands (like 'shl install') must be run in CMD/PowerShell, not here.")
 
@@ -192,7 +192,7 @@ def install_globally():
         ps_cmd = f'$oldPath = [Environment]::GetEnvironmentVariable("Path", "User"); if ($oldPath -notlike "*ShellLite*") {{ [Environment]::SetEnvironmentVariable("Path", "$oldPath;{install_dir}", "User") }}'
         subprocess.run(["powershell", "-Command", ps_cmd], capture_output=True)
         
-        print(f"\n[SUCCESS] ShellLite (v0.03.6) is installed!")
+        print(f"\n[SUCCESS] ShellLite (v0.04.1) is installed!")
         print(f"Location: {install_dir}")
         print("\nIMPORTANT STEP REQUIRED:")
         print("1. Close ALL open terminal windows (CMD, PowerShell, VS Code).")
@@ -551,6 +551,11 @@ def main():
                 line = int(sys.argv[3])
                 col = int(sys.argv[4])
                 resolve_cursor(filename, line, col)
+        elif cmd == "run":
+            if len(sys.argv) > 2:
+                run_file(sys.argv[2])
+            else:
+                print("Usage: shl run <filename>")
         else:
             run_file(sys.argv[1])
     else:

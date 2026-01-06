@@ -825,7 +825,7 @@ class Interpreter:
             result = subprocess.run(cmd, shell=True, capture_output=True, text=True)
             if result.returncode != 0:
                 print(f"Command Error: {result.stderr}")
-            return result.stdout.strip()
+            return result.stdout.strip() or result.stderr.strip()
         except Exception as e:
             raise RuntimeError(f"Failed to run command: {e}")
     def builtin_read(self, path):
@@ -1069,6 +1069,7 @@ class Interpreter:
         result = None
         for stmt in statements:
             result = self.visit(stmt)
+        self.current_env.set('__exec_result__', result)
         return result
     def visit_ImportAs(self, node: ImportAs):
         if node.path in self.std_modules:
@@ -1495,7 +1496,7 @@ class Interpreter:
                         if interpreter_ref.web.stack:
                              pass
                         if isinstance(result, Tag): response_body = str(result)
-                        elif result: response_body = str(result)
+                        elif result is not None: response_body = str(result)
                         else: response_body = "OK"
                         self.send_response(200)
                         self.send_header('Content-Type', 'text/html')
@@ -1518,7 +1519,7 @@ class Interpreter:
                             self.wfile.write(str(e).encode())
                     except: pass
         server = HTTPServer(('0.0.0.0', port_val), ShellLiteHandler)
-        print(f"\n  ShellLite Server v0.03.4 is running!")
+        print(f"\n  ShellLite Server v0.04.1 is running!")
         print(f"  \u001b[1;36m➜\u001b[0m  Local:   \u001b[1;4;36mhttp://localhost:{port_val}/\u001b[0m\n")
         try: server.serve_forever()
         except KeyboardInterrupt: 

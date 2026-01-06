@@ -2,11 +2,11 @@
 
 
 a = Analysis(
-    ['shell_lite\\main.py'],
+    ['entry_point.py'],
     pathex=[],
     binaries=[],
     datas=[],
-    hiddenimports=['prompt_toolkit'],
+    hiddenimports=[],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],

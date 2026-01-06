@@ -195,7 +195,7 @@ class Lexer:
                         'copy': 'COPY', 'paste': 'PASTE', 'clipboard': 'CLIPBOARD',
                         'press': 'PRESS', 'type': 'TYPE', 'click': 'CLICK', 'at': 'AT',
                         'notify': 'NOTIFY',
-                        'date': 'DATE', 'today': 'TODAY', 'after': 'AFTER', 'before': 'BEFORE',
+                        'date': 'ID', 'today': 'ID', 'after': 'AFTER', 'before': 'BEFORE',
                         'list': 'LIST', 'set': 'SET', 'unique': 'UNIQUE', 'of': 'OF',
                         'wait': 'WAIT',
                         'convert': 'CONVERT', 'json': 'JSON',
@@ -223,9 +223,9 @@ class Lexer:
                         'count': 'COUNT', 'many': 'MANY', 'how': 'HOW',
                         'field': 'FIELD', 'submit': 'SUBMIT', 'named': 'NAMED',
                         'placeholder': 'PLACEHOLDER',
-                        'app': 'APP', 'title': 'TITLE', 'size': 'SIZE',
-                        'column': 'COLUMN', 'row': 'ROW',
-                        'button': 'BUTTON', 'heading': 'HEADING', 'text': 'TEXT',
+                        'app': 'APP', 'title': 'ID', 'size': 'ID',
+                        'column': 'ID', 'row': 'ID',
+                        'button': 'ID', 'heading': 'HEADING', 'text': 'ID',
                     }
                     token_type = keywords.get(value, 'ID')
                     self.tokens.append(Token(token_type, value, self.line_number, current_col))

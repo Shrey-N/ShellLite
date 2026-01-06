@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="assets/logo.png" alt="ShellLite Logo" width="300" />
+</p>
+
 # ShellLite: The English-Like Programming Language
 # By Shrey Naithani
 ShellLite is a modern, interpreted programming language designed to prioritize human readability. It replaces complex syntax with natural English commands, making software development accessible and maintainable.

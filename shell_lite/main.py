@@ -61,7 +61,7 @@ def run_repl():
     print("\n" + "="*40)
     print("  ShellLite REPL - English Syntax")
     print("="*40)
-    print("Version: v0.04.1 | Made by Shrey Naithani")
+    print("Version: v0.04.2 | Made by Shrey Naithani")
     print("Commands: Type 'exit' to quit, 'help' for examples.")
     print("Note: Terminal commands (like 'shl install') must be run in CMD/PowerShell, not here.")
 
@@ -477,8 +477,7 @@ def format_file(filename: str):
     except Exception as e:
         print(f"Formatting failed: {e}")
 def self_install_check():
-    res = subprocess.run(["where", "shl"], capture_output=True, text=True)
-    if "ShellLite" not in res.stdout:
+    if not shutil.which("shl"):
         print("\nShellLite is not installed globally.")
         choice = input("Would you like to install it so 'shl' works everywhere? (y/n): ").lower()
         if choice == 'y':

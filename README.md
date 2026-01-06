@@ -1,6 +1,4 @@
-<p align="center">
-  <img src="assets/logo.png" alt="ShellLite Logo" width="300" />
-</p>
+<img src="assets/logo.png" align="right" width="250" alt="ShellLite Logo" />
 
 # ShellLite: The English-Like Programming Language
 # By Shrey Naithani

@@ -18,15 +18,15 @@ bibliography: paper.bib
 
 # Summary
 
-ShellLite is an interpreted programming language that uses open source development tools and was designed in such a way to let it be more human readable and to focus on greater simplicity in learning programming. Development of ShellLite is based on Python programming. ShellLite overcomes the difficulties of programming by utilizing programming syntax with symbols marked with braces, semicolons, and parentheses to English commands. This tool makes programming seem like performing actions with pseudocode to execute whatever commands or programming in a script format like a story.
+ShellLite is an interpreted programming language that uses open source development tools and was designed in such a way to let it be readable and to focus on greater simplicity in learning programming. Development of ShellLite is based on Python programming language. ShellLite overcomes the difficulties of programming by taking programming syntax with symbols marked with braces, semicolons, and parentheses and turn it into simple English commands. This language makes programming seem like performing actions with pseudocode or just plain english to execute whatever commands or programming in a script format like a story.
 
-The toolkit consists of a lexer, parser, and interpreter all written in Python along with a set of tools that includes a package manager called “The Universe,” a native Python connection called “The Bridge” that allows the use of any library in Python, and a declarative GUI system called “The Canvas.” ShellLite is for educators, students, or automation developers looking for a rapid scripting language that does not require boilerplate coding like traditional languages.
+The toolkit consists of a lexer, parser, and interpreter all written in Python along with a set of tools that includes a package manager called “The Universe” a native Python connection called “The Bridge” that allows the use of any library in Python, and a declarative GUI system called “The Canvas.” ShellLite is for educators, students, automation developers or even just someone looking for a rapid scripting language that does not require boilerplate coding like traditional languages.
 
 # Statement of need
 
-"ShellLite allows programming tasks to be expressed in a form closer to natural language. This goes toward filling in the chasm that currently exists between a machine parseable form of coding and an expressively attractive form. Classic programming has generally emphasized what the machine is capable of parsing as code rather than what the human mind finds easiest to comprehend. This makes the initial learning curve more daunting. Even the so called friendly language Python uses notations such as indentation and the colon symbol. It has a vocabulary of words that intimidates the novice.
+"ShellLite allows programming tasks to be expressed in a form closer to natural language. This goes toward filling in the gaps that currently exist between a machine readable form of coding and an expressively attractive form. Classic programming has generally emphasized what the machine is capable of parsing as code rather than what the human mind finds easiest to understand. This makes the initial learning curve more daunting. Even the so called friendly language Python uses notations such as indentation and the colon symbol along with many more, It has a vocabulary of words that intimidates the novice.
 
-On the other hand, the syntax of ShellLite is understandable by those who know the English language. For example, instead of using print("Hello World"), it would say "Hello World". They could also tell it to add an element x to a list named list instead of using list.append(x). Such resemblance to the English language makes the code or programming self explaining.
+On the other hand, the syntax of ShellLite is understandable by those who know the English language. For example, instead of using print("Hello World"), it would say "Hello World" or even simply "Hello World". They could also tell it to add an element x to a list named list instead of using list.append(x). Such resemblance to the English language makes the code or programming self explaining.
 
 The language of A theory of Figures is particularly useful in:
 
@@ -99,7 +99,7 @@ when someone visits "/about"
 
 # Key Features
 
-ShellLite is not a "toy" language that can only print text, it's a powerful environment in which complex applications can be developed.
+ShellLite is not merely a "toy" language that can only print text, it's a powerful environment in which complex applications can be developed, like the Official Website Itself as well as the online compiler https://shelllite.tech.
 
 ## Object Oriented Programming
 

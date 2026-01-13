@@ -3,6 +3,7 @@ from .ast_nodes import *
 from .lexer import Token, Lexer
 from .parser import Parser
 import importlib
+import types
 import operator
 import re
 import os
@@ -128,8 +129,23 @@ class WebBuilder:
             pass
 class Interpreter:
     def __init__(self):
-        print('DEBUG: VERSION 2 LOADED')
+        # print('DEBUG: ShellLite v0.04.5')
         self.global_env = Environment()
+        self.global_env.set('str', str)
+        self.global_env.set('int', int)
+        self.global_env.set('float', float)
+        self.global_env.set('list', list)
+        self.global_env.set('len', len)
+        self.global_env.set('input', input)
+        self.global_env.set('range', range)
+        
+        # English-like helpers
+        self.global_env.set('wait', time.sleep)
+        self.global_env.set('append', lambda l, x: l.append(x))
+        self.global_env.set('remove', lambda l, x: l.remove(x))
+        self.global_env.set('empty', lambda l: len(l) == 0)
+        self.global_env.set('contains', lambda l, x: x in l)
+        
         self.current_env = self.global_env
         self.functions: Dict[str, FunctionDef] = {}
         self.classes: Dict[str, ClassDef] = {}
@@ -263,6 +279,12 @@ class Interpreter:
     def _builtin_push(self, lst, item):
         lst.append(item)
         return None
+    def _builtin_upper(self, s):
+        return str(s).upper()
+    def _builtin_sum_range(self, start, end):
+        return sum(range(int(start), int(end)))
+    def _builtin_range_list(self, start, end):
+        return list(range(int(start), int(end)))
     def _init_std_modules(self):
         self.std_modules = {
             'math': {
@@ -755,7 +777,12 @@ class Interpreter:
         if node.path in self.std_modules:
             self.current_env.set(node.path, self.std_modules[node.path])
             return
+        
+        # 1. Check File System (ShellLite modules)
         import os 
+        import importlib
+        target_path = None
+        
         if os.path.exists(node.path):
              target_path = node.path
         else:
@@ -768,32 +795,45 @@ class Interpreter:
                      global_path_ext = global_path + ".shl"
                      if os.path.exists(global_path_ext):
                          target_path = global_path_ext
-                     else:
-                         raise FileNotFoundError(f"Could not find imported file: {node.path} (searched local and global modules)")
+
+        # 2. If found on FS, load as ShellLite
+        if target_path:
+            if os.path.isdir(target_path):
+                 main_shl = os.path.join(target_path, "main.shl")
+                 pkg_shl = os.path.join(target_path, f"{os.path.basename(target_path)}.shl")
+                 if os.path.exists(main_shl):
+                     target_path = main_shl
+                 elif os.path.exists(pkg_shl):
+                     target_path = pkg_shl
                  else:
-                     raise FileNotFoundError(f"Could not find imported file: {node.path} (searched local and global modules)")
-        if os.path.isdir(target_path):
-             main_shl = os.path.join(target_path, "main.shl")
-             pkg_shl = os.path.join(target_path, f"{os.path.basename(target_path)}.shl")
-             if os.path.exists(main_shl):
-                 target_path = main_shl
-             elif os.path.exists(pkg_shl):
-                 target_path = pkg_shl
-             else:
-                  raise FileNotFoundError(f"Package '{node.path}' is a folder but has no 'main.shl' or '{os.path.basename(target_path)}.shl'.")
+                      raise FileNotFoundError(f"Package '{node.path}' is a folder but has no 'main.shl' or '{os.path.basename(target_path)}.shl'.")
+            
+            try:
+                with open(target_path, 'r', encoding='utf-8') as f:
+                    code = f.read()
+            except FileNotFoundError:
+                raise FileNotFoundError(f"Could not find imported file: {node.path}")
+                
+            from .lexer import Lexer
+            from .parser import Parser
+            lexer = Lexer(code)
+            tokens = lexer.tokenize()
+            parser = Parser(tokens)
+            statements = parser.parse()
+            for stmt in statements:
+                self.visit(stmt)
+            return
+
+        # 3. BRIDGE: Try importing as a raw Python module
         try:
-            with open(target_path, 'r', encoding='utf-8') as f:
-                code = f.read()
-        except FileNotFoundError:
-            raise FileNotFoundError(f"Could not find imported file: {node.path}")
-        from .lexer import Lexer
-        from .parser import Parser
-        lexer = Lexer(code)
-        tokens = lexer.tokenize()
-        parser = Parser(tokens)
-        statements = parser.parse()
-        for stmt in statements:
-            self.visit(stmt)
+            py_module = importlib.import_module(node.path)
+            self.current_env.set(node.path, py_module)
+            return
+        except ImportError:
+            pass # Fall through to error
+            
+        raise FileNotFoundError(f"Could not find module '{node.path}'. Searched:\n - ShellLite Local/Global\n - Python Site-Packages (The Bridge)")
+
     def _get_class_properties(self, class_def: ClassDef) -> List[tuple[str, Optional[Node]]]:
         if not hasattr(class_def, 'properties'): return []
         # Support both old string list and new tuple list for backward compat if needed, though we updated AST
@@ -1519,7 +1559,7 @@ class Interpreter:
                             self.wfile.write(str(e).encode())
                     except: pass
         server = HTTPServer(('0.0.0.0', port_val), ShellLiteHandler)
-        print(f"\n  ShellLite Server v0.04.1 is running!")
+        print(f"\n  ShellLite Server v0.04.5 is running!")
         print(f"  \u001b[1;36m➜\u001b[0m  Local:   \u001b[1;4;36mhttp://localhost:{port_val}/\u001b[0m\n")
         try: server.serve_forever()
         except KeyboardInterrupt: 
@@ -1688,27 +1728,6 @@ class Interpreter:
         except FileNotFoundError:
              raise FileNotFoundError(f"File '{path}' not found.")
              raise RuntimeError(f"Read failed: {e}")
-if __name__ == '__main__':
-    import sys
-    if len(sys.argv) < 2:
-        print("Usage: python -m src.interpreter <file.shl>")
-        sys.exit(1)
-    filename = sys.argv[1]
-    try:
-        with open(filename, 'r', encoding='utf-8') as f:
-            code = f.read()
-        lexer = Lexer(code)
-        tokens = lexer.tokenize()
-        parser = Parser(tokens)
-        ast = parser.parse()
-        interpreter = Interpreter()
-        for stmt in ast:
-            interpreter.visit(stmt)
-    except Exception as e:
-        print(f"Error: {e}")
-        import traceback
-        traceback.print_exc()
-
     def _builtin_upper(self, s, only_letters=False):
         if not only_letters:
             return s.upper()

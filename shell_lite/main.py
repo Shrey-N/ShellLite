@@ -5,9 +5,9 @@ import urllib.request
 import zipfile
 import io
 import subprocess
-from .lexer_new import Lexer
-from .parser_new import Parser
-from .interpreter_new import Interpreter
+from .lexer import Lexer
+from .parser import Parser
+from .interpreter import Interpreter
 from .ast_nodes import *
 import json
 def execute_source(source: str, interpreter: Interpreter):
@@ -58,10 +58,9 @@ def run_file(filename: str):
         print(f"Error: File '{filename}' not found.")
         return
     import sys
-    if 'shell_lite.interpreter' in sys.modules:
-        print(f"DEBUG: shell_lite.interpreter file: {sys.modules['shell_lite.interpreter'].__file__}")
-    from .interpreter_final import Interpreter
-    print(f"DEBUG: Interpreter class: {Interpreter}")
+
+    # Debug prints removed for production
+    from .interpreter import Interpreter
     
     with open(filename, 'r', encoding='utf-8') as f:
         source = f.read()
@@ -72,7 +71,7 @@ def run_repl():
     print("\n" + "="*40)
     print("  ShellLite REPL - English Syntax")
     print("="*40)
-    print("Version: v0.04.2 | Made by Shrey Naithani")
+    print("Version: v0.04.5 | Made by Shrey Naithani")
     print("Commands: Type 'exit' to quit, 'help' for examples.")
     print("Note: Terminal commands (like 'shl install') must be run in CMD/PowerShell, not here.")
 
@@ -203,7 +202,7 @@ def install_globally():
         ps_cmd = f'$oldPath = [Environment]::GetEnvironmentVariable("Path", "User"); if ($oldPath -notlike "*ShellLite*") {{ [Environment]::SetEnvironmentVariable("Path", "$oldPath;{install_dir}", "User") }}'
         subprocess.run(["powershell", "-Command", ps_cmd], capture_output=True)
         
-        print(f"\n[SUCCESS] ShellLite (v0.04.1) is installed!")
+        print(f"\n[SUCCESS] ShellLite (v0.04.5) is installed!")
         print(f"Location: {install_dir}")
         print("\nIMPORTANT STEP REQUIRED:")
         print("1. Close ALL open terminal windows (CMD, PowerShell, VS Code).")

@@ -5,13 +5,18 @@ import urllib.request
 import zipfile
 import io
 import subprocess
-from .lexer import Lexer
-from .parser import Parser
-from .interpreter import Interpreter
+from .lexer_new import Lexer
+from .parser_new import Parser
+from .interpreter_new import Interpreter
 from .ast_nodes import *
 import json
 def execute_source(source: str, interpreter: Interpreter):
     lines = source.split('\n')
+    import sys
+    if 'shell_lite.interpreter' in sys.modules:
+        print(f"DEBUG: Loaded interpreter from {sys.modules['shell_lite.interpreter'].__file__}")
+    else:
+        print("DEBUG: shell_lite.interpreter not in sys.modules yet?")
     import difflib
     try:
         lexer = Lexer(source)
@@ -52,6 +57,12 @@ def run_file(filename: str):
     if not os.path.exists(filename):
         print(f"Error: File '{filename}' not found.")
         return
+    import sys
+    if 'shell_lite.interpreter' in sys.modules:
+        print(f"DEBUG: shell_lite.interpreter file: {sys.modules['shell_lite.interpreter'].__file__}")
+    from .interpreter_final import Interpreter
+    print(f"DEBUG: Interpreter class: {Interpreter}")
+    
     with open(filename, 'r', encoding='utf-8') as f:
         source = f.read()
     interpreter = Interpreter()

@@ -128,7 +128,6 @@ class WebBuilder:
             pass
 class Interpreter:
     def __init__(self):
-        print('DEBUG: VERSION 2 LOADED')
         self.global_env = Environment()
         self.current_env = self.global_env
         self.functions: Dict[str, FunctionDef] = {}
@@ -175,6 +174,9 @@ class Interpreter:
             'slice': lambda l, start, end=None: l[start:end],
             'contains': lambda l, x: x in l,
             'index': lambda l, x: l.index(x) if x in l else -1,
+            'map': self._builtin_map,
+            'filter': self._builtin_filter,
+            'reduce': self._builtin_reduce,
             'exists': os.path.exists,
             'delete': os.remove,
             'copy': shutil.copy,

@@ -1,7 +1,7 @@
 from typing import Any, Dict, List, Callable
 from .ast_nodes import *
-from .lexer import Token, Lexer
-from .parser import Parser
+from .lexer_new import Token, Lexer
+from .parser_new import Parser
 import importlib
 import operator
 import re
@@ -128,8 +128,23 @@ class WebBuilder:
             pass
 class Interpreter:
     def __init__(self):
-        print('DEBUG: VERSION 2 LOADED')
+        print('DEBUG: ShellLite v0.04.3')
         self.global_env = Environment()
+        self.global_env.set('str', str)
+        self.global_env.set('int', int)
+        self.global_env.set('float', float)
+        self.global_env.set('list', list)
+        self.global_env.set('len', len)
+        self.global_env.set('input', input)
+        self.global_env.set('range', range)
+        
+        # English-like helpers
+        self.global_env.set('wait', time.sleep)
+        self.global_env.set('append', lambda l, x: l.append(x))
+        self.global_env.set('remove', lambda l, x: l.remove(x))
+        self.global_env.set('empty', lambda l: len(l) == 0)
+        self.global_env.set('contains', lambda l, x: x in l)
+        
         self.current_env = self.global_env
         self.functions: Dict[str, FunctionDef] = {}
         self.classes: Dict[str, ClassDef] = {}
@@ -1688,27 +1703,6 @@ class Interpreter:
         except FileNotFoundError:
              raise FileNotFoundError(f"File '{path}' not found.")
              raise RuntimeError(f"Read failed: {e}")
-if __name__ == '__main__':
-    import sys
-    if len(sys.argv) < 2:
-        print("Usage: python -m src.interpreter <file.shl>")
-        sys.exit(1)
-    filename = sys.argv[1]
-    try:
-        with open(filename, 'r', encoding='utf-8') as f:
-            code = f.read()
-        lexer = Lexer(code)
-        tokens = lexer.tokenize()
-        parser = Parser(tokens)
-        ast = parser.parse()
-        interpreter = Interpreter()
-        for stmt in ast:
-            interpreter.visit(stmt)
-    except Exception as e:
-        print(f"Error: {e}")
-        import traceback
-        traceback.print_exc()
-
     def _builtin_upper(self, s, only_letters=False):
         if not only_letters:
             return s.upper()

@@ -752,7 +752,7 @@ class Parser:
                      is_named_arg = False
                      if self.peek(1).type == 'ASSIGN':
                          t_type = self.peek().type
-                         if t_type in ('ID', 'STRUCTURE', 'TYPE', 'FOR', 'IN', 'WHILE', 'IF', 'ELSE', 'FROM', 'TO', 'STRING', 'EXTENDS', 'WITH', 'PLACEHOLDER', 'NAME', 'VALUE', 'ACTION', 'METHOD', 'HREF', 'SRC', 'CLASS', 'STYLE'):
+                         if t_type in ('ID', 'STRUCTURE', 'TYPE', 'FOR', 'IN', 'WHILE', 'IF', 'ELSE', 'FROM', 'TO', 'STRING', 'EXTENDS', 'WITH', 'PLACEHOLDER', 'NAME', 'VALUE', 'ACTION', 'METHOD', 'HREF', 'SRC', 'CLASS', 'STYLE', 'ONCLICK', 'REL', 'CHARSET', 'CONTENT'):
                              is_named_arg = True
                      if is_named_arg:
                          key_token = self.consume()

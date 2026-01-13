@@ -1559,7 +1559,7 @@ class Interpreter:
                             self.wfile.write(str(e).encode())
                     except: pass
         server = HTTPServer(('0.0.0.0', port_val), ShellLiteHandler)
-        print(f"\n  ShellLite Server v0.04.5 is running!")
+        print(f"\n  ShellLite Server v0.04.6 is running!")
         print(f"  \u001b[1;36m➜\u001b[0m  Local:   \u001b[1;4;36mhttp://localhost:{port_val}/\u001b[0m\n")
         try: server.serve_forever()
         except KeyboardInterrupt: 

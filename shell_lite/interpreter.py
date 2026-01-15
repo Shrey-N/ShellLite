@@ -1457,6 +1457,10 @@ class Interpreter:
     def visit_Listen(self, node: Listen):
         port_val = self.visit(node.port)
         interpreter_ref = self
+
+        class ReusableHTTPServer(HTTPServer):
+            allow_reuse_address = True
+
         class ShellLiteHandler(BaseHTTPRequestHandler):
             def log_message(self, format, *args): pass 
             def do_GET(self): 
@@ -1508,7 +1512,9 @@ class Interpreter:
                                  self.send_header('Content-Type', ct)
                                  self.end_headers()
                                  if self.command != 'HEAD':
-                                     with open(file_path, 'rb') as f: self.wfile.write(f.read())
+                                     try:
+                                         with open(file_path, 'rb') as f: self.wfile.write(f.read())
+                                     except (BrokenPipeError, ConnectionResetError): pass
                                  return
                     matched_body = None
                     path_params = {}
@@ -1542,24 +1548,27 @@ class Interpreter:
                         self.send_header('Content-Type', 'text/html')
                         self.end_headers()
                         if self.command != 'HEAD':
-                            self.wfile.write(response_body.encode())
+                            try:
+                                self.wfile.write(response_body.encode())
+                            except (BrokenPipeError, ConnectionResetError): pass
                     else:
                         self.send_response(404)
                         self.end_headers()
                         if self.command != 'HEAD':
-                            self.wfile.write(b'Not Found')
+                            try:
+                                self.wfile.write(b'Not Found')
+                            except (BrokenPipeError, ConnectionResetError): pass
+                except (BrokenPipeError, ConnectionResetError):
+                    pass
                 except Exception as e:
-                    print(f"DEBUG: Server Exception: {e}")
-                    import traceback
-                    traceback.print_exc()
                     try:
                         self.send_response(500)
                         self.end_headers()
                         if self.command != 'HEAD':
                             self.wfile.write(str(e).encode())
                     except: pass
-        server = HTTPServer(('0.0.0.0', port_val), ShellLiteHandler)
-        print(f"\n  ShellLite Server v0.04.6 is running!")
+        server = ReusableHTTPServer(('0.0.0.0', port_val), ShellLiteHandler)
+        print(f"\n  ShellLite Server v0.04.6.1 is running!")
         print(f"  \u001b[1;36m➜\u001b[0m  Local:   \u001b[1;4;36mhttp://localhost:{port_val}/\u001b[0m\n")
         try: server.serve_forever()
         except KeyboardInterrupt: 

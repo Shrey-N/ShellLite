@@ -1469,12 +1469,7 @@ class Parser:
             node = Spawn(right)
             node.line = op.line
             return node
-        elif token.type == 'EXECUTE':
-            op = self.consume()
-            right = self.parse_expression()
-            node = Call('run', [right])
-            node.line = op.line
-            return node
+
         elif token.type == 'COUNT' or token.type == 'HOW':
             token = self.consume()
             if token.type == 'HOW':
@@ -1560,7 +1555,7 @@ class Parser:
             return self.parse_list()
         elif token.type == 'LBRACE':
             return self.parse_dict()
-        elif token.type == 'ID':
+        elif token.type == 'ID' or token.type in ('EXECUTE', 'BUTTON', 'ROW', 'COLUMN', 'SIZE', 'HEADING', 'TEXT', 'IMAGE', 'TITLE', 'START', 'SERVE', 'APP', 'PAGE', 'NAVBAR', 'FOOTER', 'SECTION', 'DIV', 'SPAN', 'LINK'):
             if token.value == 'a':
                 if self.peek(1).type == 'LIST' and self.peek(2).type == 'OF':
                     return self._parse_natural_list()

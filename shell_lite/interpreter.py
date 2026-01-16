@@ -587,9 +587,18 @@ class Interpreter:
             self.current_env = old_env
         return ret_val
     def visit_Call(self, node: Call):
+        kwargs = {}
+        if node.kwargs:
+            for k, v in node.kwargs:
+                kwargs[k] = self.visit(v)
+
         if node.name in self.builtins:
              args = [self.visit(a) for a in node.args]
-             result = self.builtins[node.name](*args)
+             if kwargs:
+                 result = self.builtins[node.name](*args, **kwargs)
+             else:
+                 result = self.builtins[node.name](*args)
+                 
              if isinstance(result, Tag):
                  if node.body:
                      self.web.push(result)
@@ -606,6 +615,8 @@ class Interpreter:
             func = self.current_env.get(node.name)
             if callable(func):
                 args = [self.visit(a) for a in node.args]
+                if kwargs:
+                    return func(*args, **kwargs)
                 return func(*args)
             curr_obj = func
             if (isinstance(curr_obj, (list, dict, str)) or isinstance(curr_obj, Instance)):
@@ -1569,7 +1580,7 @@ class Interpreter:
                             self.wfile.write(str(e).encode())
                     except: pass
         server = ReusableHTTPServer(('0.0.0.0', port_val), ShellLiteHandler)
-        print(f"\n  ShellLite Server v0.04.6.2 is running!")
+        print(f"\n  ShellLite Server v0.04.6.3 is running!")
         print(f"  \u001b[1;36m➜\u001b[0m  Local:   \u001b[1;4;36mhttp://localhost:{port_val}/\u001b[0m\n")
         try: server.serve_forever()
         except KeyboardInterrupt: 

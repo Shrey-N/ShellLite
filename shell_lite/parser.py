@@ -1617,16 +1617,26 @@ class Parser:
             # Check for C-style function call: func(arg1, arg2)
             if self.check('LPAREN'):
                 self.consume('LPAREN')
+                kwargs = []
                 if not self.check('RPAREN'):
-                    args.append(self.parse_expression())
-                    while self.check('COMMA'):
-                        self.consume('COMMA')
-                        args.append(self.parse_expression())
+                    while True:
+                        if self.check('ID') and self.peek(1).type == 'ASSIGN':
+                             k = self.consume('ID').value
+                             self.consume('ASSIGN')
+                             v = self.parse_expression()
+                             kwargs.append((k, v))
+                        else:
+                             args.append(self.parse_expression())
+                        
+                        if self.check('COMMA'):
+                            self.consume('COMMA')
+                        else:
+                            break
                 self.consume('RPAREN')
                 if method_name:
-                    node = MethodCall(instance_name, method_name, args)
+                    node = MethodCall(instance_name, method_name, args, kwargs)
                 else:
-                    node = Call(instance_name, args)
+                    node = Call(instance_name, args, kwargs)
                 node.line = token.line
                 return node
 

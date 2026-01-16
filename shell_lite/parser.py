@@ -32,6 +32,8 @@ class Parser:
     def parse_statement(self) -> Node:
         if self.check('USE') or self.check('IMPORT'):
             return self.parse_import()
+        elif self.check('FROM'):
+            return self.parse_from_import()
         elif self.check('APP'):
             return self.parse_app()
         elif self.check('ON'):
@@ -1019,6 +1021,38 @@ class Parser:
         else:
             self.consume('NEWLINE')
             node = Import(path)
+        node.line = token.line
+        return node
+
+    def parse_from_import(self) -> Node:
+        token = self.consume('FROM')
+        
+        # from <module> ...
+        if self.check('STRING'):
+             module_name = self.consume('STRING').value
+        else:
+             module_name = self.consume('ID').value
+             
+        # ... import ...
+        self.consume('IMPORT')
+        
+        names = []
+        while True:
+            name = self.consume('ID').value
+            alias = None
+            if self.check('AS'):
+                self.consume('AS')
+                alias = self.consume('ID').value
+            
+            names.append((name, alias))
+            
+            if self.check('COMMA'):
+                self.consume('COMMA')
+            else:
+                break
+                
+        self.consume('NEWLINE')
+        node = FromImport(module_name, names)
         node.line = token.line
         return node
     def parse_if(self) -> If:

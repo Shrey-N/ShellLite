@@ -281,6 +281,11 @@ class PythonImport(Node):
     alias: Optional[str]
 
 @dataclass
+class FromImport(Node):
+    module_name: str
+    names: List[tuple[str, Optional[str]]]
+
+@dataclass
 class App(Node):
     title: str
     width: int

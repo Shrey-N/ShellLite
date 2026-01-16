@@ -1061,6 +1061,18 @@ class Interpreter:
         except ImportError as e:
             raise RuntimeError(f"Could not import python module '{node.module_name}': {e}")
             
+    def visit_FromImport(self, node: FromImport):
+        try:
+            mod = importlib.import_module(node.module_name)
+            for name, alias in node.names:
+                if not hasattr(mod, name):
+                    raise AttributeError(f"Module '{node.module_name}' has no attribute '{name}'")
+                val = getattr(mod, name)
+                target_name = alias if alias else name
+                self.global_env.set(target_name, val)
+        except ImportError as e:
+            raise RuntimeError(f"Could not import python module '{node.module_name}': {e}")
+            
     def visit_Throw(self, node: Throw):
         message = self.visit(node.message)
         raise ShellLiteError(str(message))
@@ -1580,7 +1592,7 @@ class Interpreter:
                             self.wfile.write(str(e).encode())
                     except: pass
         server = ReusableHTTPServer(('0.0.0.0', port_val), ShellLiteHandler)
-        print(f"\n  ShellLite Server v0.04.6.7 is running!")
+        print(f"\n  ShellLite Server v0.04.6.8 is running!")
         print(f"  \u001b[1;36m➜\u001b[0m  Local:   \u001b[1;4;36mhttp://localhost:{port_val}/\u001b[0m\n")
         try: server.serve_forever()
         except KeyboardInterrupt: 

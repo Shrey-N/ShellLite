@@ -127,6 +127,8 @@ class Parser:
              return self.parse_write()
         elif self.check('APPEND'):
              return self.parse_append()
+        elif self.check('TRY'):
+             return self.parse_try()
         elif self.check('DB'):
              return self.parse_db_op()
         elif self.check('PRESS') or self.check('TYPE') or self.check('CLICK') or self.check('NOTIFY'):
@@ -1339,6 +1341,47 @@ class Parser:
             
         else:
             raise SyntaxError(f"Unexpected token in UI block: {token.type} at line {token.line}")
+
+    def parse_try(self):
+        self.consume('TRY')
+        self.consume('COLON')
+        self.consume('NEWLINE')
+        self.consume('INDENT')
+        try_body = []
+        while not self.check('DEDENT'):
+            try_body.append(self.parse_statement())
+        self.consume('DEDENT')
+        
+        catch_var = "e"
+        catch_body = []
+        if self.check('CATCH'):
+            self.consume('CATCH')
+            if self.check('ID'):
+                catch_var = self.consume('ID').value
+            self.consume('COLON')
+            self.consume('NEWLINE')
+            self.consume('INDENT')
+            while not self.check('DEDENT'):
+                catch_body.append(self.parse_statement())
+            self.consume('DEDENT')
+            
+        always_body = None
+        if self.check('ALWAYS'):
+            self.consume('ALWAYS')
+            self.consume('COLON')
+            self.consume('NEWLINE')
+            self.consume('INDENT')
+            always_body = []
+            while not self.check('DEDENT'):
+                always_body.append(self.parse_statement())
+            self.consume('DEDENT')
+            
+        if always_body:
+            node = TryAlways(try_body, catch_var, catch_body, always_body)
+        else:
+            node = Try(try_body, catch_var, catch_body)
+        node.line = try_body[0].line if try_body else 0
+        return node
 
     def parse_factor_simple(self) -> Node:
         token = self.peek()

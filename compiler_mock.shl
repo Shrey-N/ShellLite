@@ -1,1 +1,1 @@
-print("Compiler loaded")
+say "Compiler loaded"

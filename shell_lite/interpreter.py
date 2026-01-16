@@ -22,7 +22,7 @@ import threading
 import concurrent.futures
 import tkinter as tk
 from tkinter import messagebox, simpledialog
-from http.server import HTTPServer, BaseHTTPRequestHandler
+from http.server import HTTPServer, BaseHTTPRequestHandler, ThreadingHTTPServer
 import csv
 import zipfile
 from datetime import timedelta
@@ -1458,8 +1458,9 @@ class Interpreter:
         port_val = self.visit(node.port)
         interpreter_ref = self
 
-        class ReusableHTTPServer(HTTPServer):
+        class ReusableHTTPServer(ThreadingHTTPServer):
             allow_reuse_address = True
+            daemon_threads = True
 
         class ShellLiteHandler(BaseHTTPRequestHandler):
             def log_message(self, format, *args): pass 
@@ -1568,7 +1569,7 @@ class Interpreter:
                             self.wfile.write(str(e).encode())
                     except: pass
         server = ReusableHTTPServer(('0.0.0.0', port_val), ShellLiteHandler)
-        print(f"\n  ShellLite Server v0.04.6.1 is running!")
+        print(f"\n  ShellLite Server v0.04.6.2 is running!")
         print(f"  \u001b[1;36m➜\u001b[0m  Local:   \u001b[1;4;36mhttp://localhost:{port_val}/\u001b[0m\n")
         try: server.serve_forever()
         except KeyboardInterrupt: 

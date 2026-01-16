@@ -182,7 +182,7 @@ class Lexer:
                         'true': 'YES', 'false': 'NO',
                         'const': 'CONST',
                         'and': 'AND', 'or': 'OR', 'not': 'NOT',
-                        'try': 'TRY', 'catch': 'CATCH', 'always': 'ALWAYS',
+                        'try': 'TRY', 'catch': 'CATCH', 'always': 'ALWAYS', 'finally': 'ALWAYS',
                         'use': 'USE', 'as': 'AS', 'share': 'SHARE',
                         'execute': 'EXECUTE', 'run': 'EXECUTE',
                         'alert': 'ALERT', 'prompt': 'PROMPT', 'confirm': 'CONFIRM',

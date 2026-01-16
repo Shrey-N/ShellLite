@@ -184,6 +184,7 @@ class Lexer:
                         'and': 'AND', 'or': 'OR', 'not': 'NOT',
                         'try': 'TRY', 'catch': 'CATCH', 'always': 'ALWAYS', 'finally': 'ALWAYS',
                         'use': 'USE', 'as': 'AS', 'share': 'SHARE',
+                        'import': 'IMPORT',
                         'execute': 'EXECUTE', 'run': 'EXECUTE',
                         'alert': 'ALERT', 'prompt': 'PROMPT', 'confirm': 'CONFIRM',
                         'spawn': 'SPAWN', 'await': 'AWAIT',

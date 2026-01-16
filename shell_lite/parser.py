@@ -781,10 +781,7 @@ class Parser:
                         if self.check('DEDENT'): break
                         body.append(self.parse_statement())
                     self.consume('DEDENT')
-                node = Call(name, args, body)
-                node.line = name_token.line
-                return node
-                node = Call(name, args, body)
+                node = Call(name, args, body=body)
                 node.line = name_token.line
                 return node
             if self.check('NEWLINE'):
@@ -801,7 +798,7 @@ class Parser:
                     if self.check('DEDENT'): break
                     body.append(self.parse_statement())
                 self.consume('DEDENT')
-                node = Call(name, [], body)
+                node = Call(name, [], body=body)
                 node.line = name_token.line
                 return node
             node = VarAccess(name)

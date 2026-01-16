@@ -30,7 +30,7 @@ class Parser:
                 statements.append(stmt)
         return statements
     def parse_statement(self) -> Node:
-        if self.check('USE'):
+        if self.check('USE') or self.check('IMPORT'):
             return self.parse_import()
         elif self.check('APP'):
             return self.parse_app()

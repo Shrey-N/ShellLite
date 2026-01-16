@@ -985,7 +985,11 @@ class Parser:
         self.consume('NEWLINE')
         return Assign(name, value)
     def parse_import(self) -> Node:
-        token = self.consume('USE')
+        token = None
+        if self.check('USE'):
+             token = self.consume('USE')
+        else:
+             token = self.consume('IMPORT')
         
         # Check for Python Import: use python "numpy" as np
         if self.check('ID') and self.peek().value == 'python':

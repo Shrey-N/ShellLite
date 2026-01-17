@@ -12,11 +12,7 @@ from .ast_nodes import *
 import json
 def execute_source(source: str, interpreter: Interpreter):
     lines = source.split('\n')
-    import sys
-    if 'shell_lite.interpreter' in sys.modules:
-        print(f"DEBUG: Loaded interpreter from {sys.modules['shell_lite.interpreter'].__file__}")
-    else:
-        print("DEBUG: shell_lite.interpreter not in sys.modules yet?")
+
     import difflib
     try:
         lexer = Lexer(source)

@@ -141,6 +141,8 @@ class Parser:
             if self.peek(1).type == 'FUNCTION':
                  return self.parse_function_def()
             return self.parse_define_page()
+        elif self.check('SUBTRACT'):
+            return self.parse_subtract()
         elif self.check('ADD'):
             if self.peek(1).type == 'ID' or self.peek(1).type == 'NUMBER' or self.peek(1).type == 'STRING':
                  # Heuristic: "Add X to Y" (List) vs "Add Component" (UI) maybe?
@@ -2049,16 +2051,30 @@ class Parser:
         node = FileWrite(path, content, 'w')
         node.line = token.line
         return node
-    def parse_append(self) -> FileWrite:
+    def parse_append(self) -> Node:
         token = self.consume('APPEND')
         content = self.parse_expression()
         self.consume('TO')
-        self.consume('FILE')
-        path = self.parse_expression()
-        self.consume('NEWLINE')
-        node = FileWrite(path, content, 'a')
-        node.line = token.line
-        return node
+        
+        if self.check('FILE'):
+            self.consume('FILE')
+            path = self.parse_expression()
+            self.consume('NEWLINE')
+            node = FileWrite(path, content, 'a')
+            node.line = token.line
+            return node
+        else:
+            # Assuming list append / smart add
+            list_expr = self.parse_expression()
+            self.consume('NEWLINE')
+            
+            if isinstance(list_expr, VarAccess):
+                node = Assign(list_expr.name, Call('append', [list_expr, content]))
+            else:
+                node = Call('append', [list_expr, content])
+            
+            node.line = token.line
+            return node
 
 
     def parse_increment(self) -> Assign:
@@ -2085,26 +2101,28 @@ class Parser:
 
 
 
+
     def parse_decrement(self) -> Assign:
-
         token = self.consume('DECREMENT')
-
         name = self.consume('ID').value
-
         amount = Number(1)
-
         if self.check('BY'):
-
             self.consume('BY')
-
             amount = self.parse_expression()
-
         self.consume('NEWLINE')
-
         node = Assign(name, BinOp(VarAccess(name), '-', amount))
-
         node.line = token.line
+        return node
 
+    def parse_subtract(self) -> Assign:
+        token = self.consume('SUBTRACT')
+        amount = self.parse_expression()
+        self.consume('FROM')
+        name_token = self.consume('ID')
+        name = name_token.value
+        self.consume('NEWLINE')
+        node = Assign(name, BinOp(VarAccess(name), '-', amount))
+        node.line = token.line
         return node
 
 
@@ -2257,7 +2275,14 @@ class Parser:
         self.consume('TO')
         list_expr = self.parse_expression()
         self.consume('NEWLINE')
-        node = Call('append', [list_expr, item])
+        
+        # If adding to a variable, assign the result back (to support numbers/strings via smart_add)
+        if isinstance(list_expr, VarAccess):
+            # x = append(x, item) -> smart_add(x, item)
+            node = Assign(list_expr.name, Call('append', [list_expr, item]))
+        else:
+            node = Call('append', [list_expr, item])
+            
         node.line = token.line
         return node
 

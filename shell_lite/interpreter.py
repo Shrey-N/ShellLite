@@ -141,7 +141,8 @@ class Interpreter:
         
         # English-like helpers
         self.global_env.set('wait', time.sleep)
-        self.global_env.set('append', lambda l, x: l.append(x))
+        self.global_env.set('append', self._builtin_smart_add)
+        self.global_env.set('push', self._builtin_smart_add)
         self.global_env.set('remove', lambda l, x: l.remove(x))
         self.global_env.set('empty', lambda l: len(l) == 0)
         self.global_env.set('contains', lambda l, x: x in l)
@@ -179,8 +180,8 @@ class Interpreter:
             'range_list': self._builtin_range_list,
             'find': lambda s, sub: s.find(sub),
             'char': chr, 'ord': ord,
-            'append': lambda l, x: (l.append(x), l)[1],
-            'push': self._builtin_push,
+            'append': self._builtin_smart_add,
+            'push': self._builtin_smart_add,
             'count': len,  
             'remove': lambda l, x: l.remove(x),
             'pop': lambda l, idx=-1: l.pop(idx),
@@ -285,6 +286,14 @@ class Interpreter:
         return sum(range(int(start), int(end)))
     def _builtin_range_list(self, start, end):
         return list(range(int(start), int(end)))
+    def _builtin_smart_add(self, target, val):
+        if isinstance(target, list):
+            target.append(val)
+            return target
+        elif isinstance(target, (int, float, str)):
+            return target + val
+        else:
+            raise TypeError(f"Cannot add to {type(target).__name__}")
     def _init_std_modules(self):
         self.std_modules = {
             'math': {
@@ -1099,16 +1108,23 @@ class Interpreter:
         count = self.visit(node.count)
         if not isinstance(count, int):
             raise TypeError(f"repeat count must be an integer, got {type(count).__name__}")
-        for _ in range(count):
-            try:
-                for stmt in node.body:
-                    self.visit(stmt)
-            except StopException:
-                break
-            except SkipException:
-                continue
-            except ReturnException:
-                raise
+        
+        old_env = self.current_env
+        self.current_env = Environment(parent=self.current_env)
+        try:
+            for i in range(count):
+                self.current_env.set('index', i)
+                try:
+                    for stmt in node.body:
+                        self.visit(stmt)
+                except StopException:
+                    break
+                except SkipException:
+                    continue
+        except ReturnException:
+            raise
+        finally:
+            self.current_env = old_env
     def visit_When(self, node: When):
         value = self.visit(node.value)
         for match_val, body in node.cases:

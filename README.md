@@ -49,6 +49,8 @@ shl install
 
 | Tool | Description | Link |
 | :--- | :--- | :--- |
+| **Book** | teaches cognitive friendly language design, controlled natural languages, compiler construction, forgiving parsing, FFI bridging, performance tuning, and provides full grammar, implementation, and architecture. | [Book](https://books2read.com/b/mVpoXM) |
+| **Research Artifact** | Published on Zenodo By CERN | [GitHub](https://github.com/Shrey-N/ShellDesk) |
 | **ShellDesk** | The official IDE for ShellLite. | [GitHub](https://github.com/Shrey-N/ShellDesk) |
 | **VS Code Extension** | Syntax highlighting and snippets. | [Marketplace](https://marketplace.visualstudio.com/items?itemName=ShellLite.shelllite-hello) / [OpenVSX](https://open-vsx.org/extension/shelllite/shelllite-hello) |
 | **Website** | Official website source code. | [GitHub](https://github.com/Shrey-N/ShellLite-Website) |

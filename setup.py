@@ -4,10 +4,10 @@ with open("README.md", "r", encoding="utf-8") as fh:
     long_description = fh.read()
 
 setup(
-    name="shell-lite-llvm",
+    name="shell-lite",
     version="0.05",
     author="Shrey Naithani",
-    author_email="shrey@antigravity.ai", # Placeholder
+    author_email="mrytshplays@gmail.com",
     description="ShellLite: The English-Like Programming Language with LLVM Backend",
     long_description=long_description,
     long_description_content_type="text/markdown",

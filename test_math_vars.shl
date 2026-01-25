@@ -1,0 +1,18 @@
+make x be 100
+make y be 50
+
+make sum be x + y
+say "Sum (150):"
+say sum
+
+make diff be x - y
+say "Diff (50):"
+say diff
+
+make prod be x * 2
+say "Prod (200):"
+say prod
+
+make div be x / 2
+say "Div (50):"
+say div

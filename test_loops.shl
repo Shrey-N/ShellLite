@@ -1,0 +1,9 @@
+say "--- While Loop ---"
+make i be 0
+while i < 3:
+    say i
+    make i be i + 1
+
+say "--- Repeat Loop ---"
+repeat 3 times:
+    say "Repeat!"

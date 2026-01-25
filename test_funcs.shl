@@ -1,0 +1,14 @@
+make s1 be "Hello "
+make s2 be "World"
+make s3 be s1 + s2
+say s3
+
+to greet name:
+    say "Welcome " + name
+
+greet("Shrey")
+
+to add_nums a b:
+    return a + b
+
+say add_nums(10, 20)

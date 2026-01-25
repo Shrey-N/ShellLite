@@ -1550,10 +1550,9 @@ class Parser:
             node.line = op.line
             return node
 
-        elif token.type == 'COUNT' or token.type == 'HOW':
+        elif token.type == 'HOW':
             token = self.consume()
-            if token.type == 'HOW':
-                self.consume('MANY')
+            self.consume('MANY')
             if self.check('OF'):
                 self.consume('OF')
             expr = self.parse_expression()
@@ -1590,8 +1589,7 @@ class Parser:
              node = FileRead(path)
              node.line = token.line
              return node
-        elif token.type == 'SUM':
-            return self.parse_sum()
+
         elif token.type == 'UPPER':
             return self.parse_upper()
         elif token.type == 'DATE':
@@ -1641,6 +1639,31 @@ class Parser:
                     return self._parse_natural_list()
                 elif self.peek(1).type == 'UNIQUE' and self.peek(2).type == 'SET' and self.peek(3).type == 'OF':
                     return self._parse_natural_set()
+            
+            # Contextual Keywords (previously reserved)
+            if token.value == 'sum' and self.peek(1).type == 'OF':
+                return self.parse_sum()
+                
+            if token.value == 'count':
+                # Check for 'count of <expr>'
+                if self.peek(1).type == 'OF':
+                    self.consume() # count
+                    self.consume('OF')
+                    expr = self.parse_expression()
+                    node = Call('len', [expr])
+                    node.line = token.line
+                    return node
+            
+            if token.value == 'length':
+                # Check for 'length of <expr>'
+                if self.peek(1).type == 'OF':
+                    self.consume() # length
+                    self.consume('OF')
+                    expr = self.parse_expression()
+                    node = Call('len', [expr])
+                    node.line = token.line
+                    return node
+
             if token.value == 'numbers' and self.peek(1).type == 'FROM':
                 return self.parse_numbers_range()
             self.consume()
@@ -2188,7 +2211,7 @@ class Parser:
 
 
     def parse_sum(self) -> Node:
-        token = self.consume('SUM')
+        token = self.consume('ID')
         self.consume('OF')
         
         # Check for 'numbers from ...' (contextual keyword 'numbers')

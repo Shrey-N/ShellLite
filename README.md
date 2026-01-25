@@ -22,6 +22,14 @@ pip install shell-lite
 ### Windows Installer
 Download the latest `shl.exe` from the Releases page.
 
+## Compilation
+
+To compile ShellLite code to native machine code (LLVM IR):
+
+```bash
+shl compile script.shl
+```
+
 ## Quick Start
 
 ### 1. Hello World
@@ -63,4 +71,3 @@ Full documentation is available directly in this repository:
 
 License: MIT
 Made by Shrey Naithani
-

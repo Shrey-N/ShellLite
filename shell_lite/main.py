@@ -17,7 +17,15 @@ def execute_source(source: str, interpreter: Interpreter):
     try:
         lexer = Lexer(source)
         tokens = lexer.tokenize()
-        parser = Parser(tokens)
+        
+        # Select Parser based on Environment Variable (GBP Integration)
+        if os.environ.get('USE_GBP') == '1':
+            from .parser_gbp import GeometricBindingParser
+            # print("[DEBUG] Using Geometric-Binding Parser (GBP)")
+            parser = GeometricBindingParser(tokens)
+        else:
+            parser = Parser(tokens)
+            
         statements = parser.parse()
         for stmt in statements:
             interpreter.visit(stmt)
@@ -65,9 +73,8 @@ def run_file(filename: str):
 def run_repl():
     interpreter = Interpreter()
     print("\n" + "="*40)
-    print("  ShellLite REPL - English Syntax")
     print("="*40)
-    print("Version: v0.04.6.8 | Made by Shrey Naithani")
+    print("Version: v0.05 | Made by Shrey Naithani")
     print("Commands: Type 'exit' to quit, 'help' for examples.")
     print("Note: Terminal commands (like 'shl install') must be run in CMD/PowerShell, not here.")
 
@@ -340,7 +347,7 @@ def install_package(package_name: str, branch: str = "main"):
     except Exception as e:
         print(f"Installation failed for {package_name}: {e}")
 
-def compile_file(filename: str, target: str = 'python'):
+def compile_file(filename: str, target: str = 'llvm'):
     if not os.path.exists(filename):
         print(f"Error: File '{filename}' not found.")
         return
@@ -359,11 +366,20 @@ def compile_file(filename: str, target: str = 'python'):
             compiler = JSCompiler()
             code = compiler.compile(statements)
             ext = '.js'
+        elif target.lower() == 'llvm':
+            try:
+                from .llvm_backend.builder import build_llvm
+                build_llvm(filename)
+                return # build_llvm handles writing file
+            except ImportError:
+                print("Error: 'llvmlite' is required for LLVM compilation.")
+                return
         else:
             from .compiler import Compiler
             compiler = Compiler()
             code = compiler.compile(statements)
             ext = '.py'
+
         output_file = filename.replace('.shl', ext)
         if output_file == filename: output_file += ext
         with open(output_file, 'w') as f:
@@ -508,17 +524,28 @@ def main():
         if cmd == "compile" or cmd == "build":
             if len(sys.argv) > 2:
                 filename = sys.argv[2]
-                target = 'python'
+                target = 'llvm' # Default to LLVM
                 if '--target' in sys.argv:
                     try:
                         idx = sys.argv.index('--target')
                         target = sys.argv[idx+1]
                     except IndexError:
-                        print("Error: --target requires an argument (js/python)")
+                        print("Error: --target requires an argument (js/python/llvm)")
                         return
                 compile_file(filename, target)
             else:
                 print("Usage: shl compile <filename> [--target js]")
+        elif cmd == "llvm":
+             if len(sys.argv) > 2:
+                 try:
+                     import llvmlite
+                     from .llvm_backend.builder import build_llvm
+                     build_llvm(sys.argv[2])
+                 except ImportError:
+                     print("Error: 'llvmlite' is required for LLVM backend.")
+                     print("Run: pip install llvmlite")
+             else:
+                 print("Usage: shl llvm <filename>")
         elif cmd == "help" or cmd == "--help" or cmd == "-h":
             show_help()
         elif cmd == "get":

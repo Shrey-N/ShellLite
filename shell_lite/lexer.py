@@ -25,8 +25,6 @@ class Lexer:
                 continue
             indent_level = len(line) - len(line.lstrip())
             if stripped_line.startswith('#'):
-                # self.tokens.append(Token('COMMENT', stripped_line, self.line_number, indent_level + 1))
-                # self.tokens.append(Token('NEWLINE', '', self.line_number, len(line) + 1))
                 continue
             if indent_level > self.indent_stack[-1]:
                 self.indent_stack.append(indent_level)

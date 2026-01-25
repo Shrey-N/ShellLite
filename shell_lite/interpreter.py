@@ -129,7 +129,6 @@ class WebBuilder:
             pass
 class Interpreter:
     def __init__(self):
-        # print('DEBUG: ShellLite v0.04.5')
         self.global_env = Environment()
         self.global_env.set('str', str)
         self.global_env.set('int', int)
@@ -138,15 +137,12 @@ class Interpreter:
         self.global_env.set('len', len)
         self.global_env.set('input', input)
         self.global_env.set('range', range)
-        
-        # English-like helpers
         self.global_env.set('wait', time.sleep)
         self.global_env.set('append', self._builtin_smart_add)
         self.global_env.set('push', self._builtin_smart_add)
         self.global_env.set('remove', lambda l, x: l.remove(x))
         self.global_env.set('empty', lambda l: len(l) == 0)
         self.global_env.set('contains', lambda l, x: x in l)
-        
         self.current_env = self.global_env
         self.functions: Dict[str, FunctionDef] = {}
         self.classes: Dict[str, ClassDef] = {}
@@ -600,14 +596,12 @@ class Interpreter:
         if node.kwargs:
             for k, v in node.kwargs:
                 kwargs[k] = self.visit(v)
-
         if node.name in self.builtins:
              args = [self.visit(a) for a in node.args]
              if kwargs:
                  result = self.builtins[node.name](*args, **kwargs)
              else:
                  result = self.builtins[node.name](*args)
-                 
              if isinstance(result, Tag):
                  if node.body:
                      self.web.push(result)
@@ -661,19 +655,13 @@ class Interpreter:
             raise NameError(f"Class '{node.class_name}' not defined.")
         class_def = self.classes[node.class_name]
         all_properties = self._get_class_properties(class_def)
-        
-        # Check args length
-        # First count how many properties are required (no default)
         required_count = 0
         for name, default_val in all_properties:
             if default_val is None:
                 required_count += 1
-        
         if len(node.args) < required_count:
              raise TypeError(f"Structure '{node.class_name}' expects at least {required_count} args, got {len(node.args)}")
-        
         instance = Instance(class_def)
-        
         for i, (prop_name, default_val) in enumerate(all_properties):
             val = None
             if i < len(node.args):
@@ -681,11 +669,8 @@ class Interpreter:
             elif default_val is not None:
                 val = self.visit(default_val)
             else:
-                # Should be caught by required_count check, but safety fallback
                 raise TypeError(f"Missing argument for property '{prop_name}' in '{node.class_name}'")
-            
             instance.data[prop_name] = val
-
         self.current_env.set(node.var_name, instance)
         return instance
     def visit_MethodCall(self, node: MethodCall):
@@ -760,49 +745,30 @@ class Interpreter:
         return ret_val
     def visit_PropertyAccess(self, node: PropertyAccess):
         instance = self.current_env.get(node.instance_name)
-        
-        # 1. ShellLite Instance
         if isinstance(instance, Instance):
             if node.property_name not in instance.data:
-                 # Check for methods? PropertyAccess usually implies data.
-                 # But in some cases we might want method reference?
                  raise AttributeError(f"Structure '{instance.class_def.name}' has no property '{node.property_name}'")
             return instance.data[node.property_name]
-            
-        # 2. Dictionary
         elif isinstance(instance, dict):
              if node.property_name in instance:
                  return instance[node.property_name]
              raise AttributeError(f"Dictionary has no key '{node.property_name}'")
-
-        # 3. List
         elif isinstance(instance, list):
              if node.property_name == 'length':
                  return len(instance)
-        
-        # 4. String
         elif isinstance(instance, str):
              if node.property_name == 'length':
                  return len(instance)
-
-        # 5. Python Object / Module Interop
-        # If the instance has the attribute natively, return it.
-        # This handles 'math.pi', 'os.name', etc.
         if hasattr(instance, node.property_name):
              return getattr(instance, node.property_name)
-             
         raise TypeError(f"Object '{node.instance_name}' (type {type(instance).__name__}) has no property '{node.property_name}'")
-
     def visit_Import(self, node: Import):
         if node.path in self.std_modules:
             self.current_env.set(node.path, self.std_modules[node.path])
             return
-        
-        # 1. Check File System (ShellLite modules)
         import os 
         import importlib
         target_path = None
-        
         if os.path.exists(node.path):
              target_path = node.path
         else:
@@ -815,8 +781,6 @@ class Interpreter:
                      global_path_ext = global_path + ".shl"
                      if os.path.exists(global_path_ext):
                          target_path = global_path_ext
-
-        # 2. If found on FS, load as ShellLite
         if target_path:
             if os.path.isdir(target_path):
                  main_shl = os.path.join(target_path, "main.shl")
@@ -827,13 +791,11 @@ class Interpreter:
                      target_path = pkg_shl
                  else:
                       raise FileNotFoundError(f"Package '{node.path}' is a folder but has no 'main.shl' or '{os.path.basename(target_path)}.shl'.")
-            
             try:
                 with open(target_path, 'r', encoding='utf-8') as f:
                     code = f.read()
             except FileNotFoundError:
                 raise FileNotFoundError(f"Could not find imported file: {node.path}")
-                
             from .lexer import Lexer
             from .parser import Parser
             lexer = Lexer(code)
@@ -843,27 +805,21 @@ class Interpreter:
             for stmt in statements:
                 self.visit(stmt)
             return
-
-        # 3. BRIDGE: Try importing as a raw Python module
         try:
             py_module = importlib.import_module(node.path)
             self.current_env.set(node.path, py_module)
             return
         except ImportError:
             pass # Fall through to error
-            
         raise FileNotFoundError(f"Could not find module '{node.path}'. Searched:\n - ShellLite Local/Global\n - Python Site-Packages (The Bridge)")
-
     def _get_class_properties(self, class_def: ClassDef) -> List[tuple[str, Optional[Node]]]:
         if not hasattr(class_def, 'properties'): return []
-        # Support both old string list and new tuple list for backward compat if needed, though we updated AST
         props = []
         for p in class_def.properties:
             if isinstance(p, tuple):
                 props.append(p)
             else:
                 props.append((p, None))
-                
         if class_def.parent:
             if class_def.parent not in self.classes:
                 raise NameError(f"Parent class '{class_def.parent}' not defined.")
@@ -1069,7 +1025,6 @@ class Interpreter:
             self.global_env.set(name, mod)
         except ImportError as e:
             raise RuntimeError(f"Could not import python module '{node.module_name}': {e}")
-            
     def visit_FromImport(self, node: FromImport):
         try:
             mod = importlib.import_module(node.module_name)
@@ -1081,7 +1036,6 @@ class Interpreter:
                 self.global_env.set(target_name, val)
         except ImportError as e:
             raise RuntimeError(f"Could not import python module '{node.module_name}': {e}")
-            
     def visit_Throw(self, node: Throw):
         message = self.visit(node.message)
         raise ShellLiteError(str(message))
@@ -1108,7 +1062,6 @@ class Interpreter:
         count = self.visit(node.count)
         if not isinstance(count, int):
             raise TypeError(f"repeat count must be an integer, got {type(count).__name__}")
-        
         old_env = self.current_env
         self.current_env = Environment(parent=self.current_env)
         try:
@@ -1230,62 +1183,32 @@ class Interpreter:
             code = self.visit(node.code)
             sys.exit(int(code))
         sys.exit(0)
-
-    # -------------------------------------------------------------------------
-    # Project Polaris: Phase 2 (The Canvas - Native UI)
-    # -------------------------------------------------------------------------
     def visit_App(self, node: App):
-        # We need a root for the app
         import tkinter as tk
         from tkinter import messagebox
         root = tk.Tk()
         root.title(node.title)
         root.geometry(f"{node.width}x{node.height}")
-        
-        # Store root for potential access, though mostly we use 'master' passed down
-        # Ideally we pass 'parent' to visits, but we don't have that signature.
-        # So we'll use a stack or a temporary context.
         self.ui_parent_stack = [root]
-        
-        # Define a helpful alert function available in UI context
         def ui_alert(msg):
             messagebox.showinfo("Message", str(msg))
         self.current_env.set("alert", ui_alert)
-
         try:
             for child in node.body:
                 self.visit(child)
         finally:
             self.ui_parent_stack.pop()
-            
         root.mainloop()
-
     def visit_Layout(self, node: Layout):
         parent = self.ui_parent_stack[-1]
-        
-        # Create a frame for the layout
         frame = tk.Frame(parent)
-        
-        # Pack options based on layout type of THIS container relative to parent??
-        # Usually Layout implies how CHILDREN are arranged.
-        # But here 'column' means "I am a column" -> children stacked vertically.
-        # 'row' means "I am a row" -> children stacked horizontally.
-        
-        # In Tkinter, pack() defaults to vertical (column).
-        # side=LEFT makes it horizontal (row).
-        
-        # We start by adding the frame to the parent.
-        # If parent is a Column, we pack(side=TOP). If Row, pack(side=LEFT).
-        # But simplified: Just use pack(fill=X) or something.
         frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True, padx=5, pady=5)
-        
         self.ui_parent_stack.append((frame, node.layout_type))
         try:
             for child in node.body:
                 self.visit(child)
         finally:
             self.ui_parent_stack.pop()
-
     def visit_Widget(self, node: Widget):
         from tkinter import messagebox
         parent_ctx = self.ui_parent_stack[-1]
@@ -1294,10 +1217,8 @@ class Interpreter:
         else:
             parent = parent_ctx
             layout_mode = 'column' # Default to column
-            
         widget = None
         if node.widget_type == 'button':
-            # Handle event
             def on_click():
                 if node.event_handler:
                     try:
@@ -1305,64 +1226,41 @@ class Interpreter:
                             self.visit(stmt)
                     except Exception as e:
                         messagebox.showerror("Error", str(e))
-                        
             widget = tk.Button(parent, text=node.label, command=on_click)
-            
         elif node.widget_type == 'input':
             lbl = tk.Label(parent, text=node.label)
             pack_opts = {'side': tk.TOP, 'anchor': 'w'} if layout_mode == 'column' else {'side': tk.LEFT}
             lbl.pack(**pack_opts)
-            
             widget = tk.Entry(parent)
-            
-            # Store accessor in Env so we can read .value
             if node.var_name:
-                # We can't store the widget directly because .value access visits PropertyAccess
-                # which expects dict, list, or python object.
-                # Tkinter Entry has get().
-                # We wrap it or just rely on 'visit_PropertyAccess' (Phase 1)
-                # By default Tkinter widgets store config. 
-                # Let's verify if widget.value works natively? No.
-                # So we wrap it.
                 class InputWrapper:
                     def __init__(self, w): self.w = w
                     @property
                     def value(self): return self.w.get()
                     @property
                     def text(self): return self.w.get()
-                
                 self.current_env.set(node.var_name, InputWrapper(widget))
-
         elif node.widget_type == 'heading':
             widget = tk.Label(parent, text=node.label, font=("Helvetica", 16, "bold"))
-            
         elif node.widget_type == 'text':
             widget = tk.Label(parent, text=node.label)
-            
         if widget:
-            # Layout the widget
             if layout_mode == 'column':
                 widget.pack(side=tk.TOP, pady=5, fill=tk.X)
             else:
                 widget.pack(side=tk.LEFT, padx=5)
-
     def visit_Make(self, node: Make):
         if node.class_name not in self.classes:
             raise NameError(f"Thing '{node.class_name}' not defined.")
         class_def = self.classes[node.class_name]
         props = self._get_class_properties(class_def)
-
-        # Check args length
         required_count = 0
         for name, default_val in props:
             if default_val is None:
                 required_count += 1
-
         if len(node.args) < required_count:
              raise TypeError(f"Thing '{node.class_name}' expects at least {required_count} values, got {len(node.args)}")
-        
         instance = Instance(class_def)
-        
         for i, (prop_name, default_val) in enumerate(props):
             val = None
             if i < len(node.args):
@@ -1371,9 +1269,7 @@ class Interpreter:
                 val = self.visit(default_val)
             else:
                 raise TypeError(f"Missing argument for property '{prop_name}' in '{node.class_name}'")
-            
             instance.data[prop_name] = val
-            
         return instance
     def visit_Convert(self, node: Convert):
         val = self.visit(node.expression)
@@ -1496,11 +1392,9 @@ class Interpreter:
     def visit_Listen(self, node: Listen):
         port_val = self.visit(node.port)
         interpreter_ref = self
-
         class ReusableHTTPServer(ThreadingHTTPServer):
             allow_reuse_address = True
             daemon_threads = True
-
         class ShellLiteHandler(BaseHTTPRequestHandler):
             def log_message(self, format, *args): pass 
             def do_GET(self): 
@@ -1780,30 +1674,11 @@ class Interpreter:
     def _builtin_upper(self, s, only_letters=False):
         if not only_letters:
             return s.upper()
-        # "UPPER words ONLY LETTERS" -> Uppercase normal letters, leave others?
-        # Or maybe it means "Only extract uppercase letters"?
-        # User output shows: "HELLO WORLD 123" -> "HELLO WORLD 123" (normal)
-        # Wait, user screenshot says: 
-        # text = "hello world 123"
-        # words = split text
-        # say upper words only letters
-        # Error: Variable 'only' is not defined.
-        # So maybe they want to UPPERCASE ONLY LETTERS? digits remain same? .upper() does that.
-        # But maybe they mean "remove non-letters"?
-        # "upper words only letters" -> "HELLO WORLD". 
-        # If "only letters" means filter?
-        # Let's assume it means "uppercase only the letters" which is standard behavior?
-        # Or maybe "uppercase, and keep only letters".
-        # Let's look at user intent. "upper words only letters".
-        # Likely: Uppercase and remove numbers/symbols?
-        # If input is "hello world 123", output might be "HELLO WORLD".
         if only_letters:
              import re
              return re.sub(r'[^a-zA-Z\s]', '', s).upper()
         return s.upper()
-
     def _builtin_sum_range(self, start, end, condition=None):
-        # condition is a string, e.g. "even", "odd", "prime", "digits"
         total = 0
         s = int(start)
         e = int(end)
@@ -1818,15 +1693,10 @@ class Interpreter:
                          if i % k == 0:
                              include = False; break
              elif condition == 'digits':
-                  # sum of digits? Or sum of numbers that are single digits?
-                  # "sum of numbers from 1 to 10 when digits" -> unclear.
-                  # Assuming "digits" meant specific property.
                   pass
-             
              if include:
                  total += i
         return total
-
     def _builtin_range_list(self, start, end, condition=None):
         res = []
         s = int(start)
@@ -1841,7 +1711,6 @@ class Interpreter:
                      for k in range(2, int(i ** 0.5) + 1):
                          if i % k == 0:
                              include = False; break
-             
              if include:
                  res.append(i)
         return res

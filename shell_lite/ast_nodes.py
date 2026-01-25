@@ -279,26 +279,22 @@ class DatabaseOp(Node):
 class PythonImport(Node):
     module_name: str
     alias: Optional[str]
-
 @dataclass
 class FromImport(Node):
     module_name: str
     names: List[tuple[str, Optional[str]]]
-
 @dataclass
 class App(Node):
     title: str
     width: int
     height: int
     body: List[Node]
-
 @dataclass
 class Widget(Node):
     widget_type: str  # 'button', 'input', 'heading', 'text'
     label: str
     var_name: Optional[str] = None
     event_handler: Optional[List[Node]] = None # For buttons with 'do:'
-
 @dataclass
 class Layout(Node):
     layout_type: str # 'column', 'row'

@@ -79,9 +79,6 @@ if start_index != -1 and end_index != -1:
             
         raise FileNotFoundError(f"Could not find module '{node.path}'. Searched:\\n - ShellLite Local/Global\\n - Python Site-Packages (The Bridge)")
 """
-    # Insert new method
-    # We replace from start_index to end_index (exclusive of end_index)
-    # But new_method needs a trailing newline
     
     lines[start_index:end_index] = [new_method + "\n"]
     

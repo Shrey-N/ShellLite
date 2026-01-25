@@ -145,34 +145,20 @@ class Parser:
             return self.parse_subtract()
         elif self.check('ADD'):
             if self.peek(1).type == 'ID' or self.peek(1).type == 'NUMBER' or self.peek(1).type == 'STRING':
-                 # Heuristic: "Add X to Y" (List) vs "Add Component" (UI) maybe?
-                 # Assuming UI "add" uses 'ADD' keyword?
-                 # Lexer maps 'add' to 'ADD'.
-                 # parse_add_to -> UI.
-                 # parse_add_to_list -> List.
-                 # Let's check parse_add_to signature.
                  pass
-            # For now prioritize List if 'TO' is present later? 
-            # Or assume parse_add_to handles UI.
-            # Let's peek(1). If it's an expression -> List op. If it's a Component?
-            # Creating a unified parse_add dispatcher might be better.
             return self.parse_add_distinguish()
-
         elif self.check('START'):
             return self.parse_start_server()
         elif self.check('HEADING'):
             return self.parse_heading()
         elif self.check('PARAGRAPH'):
             return self.parse_paragraph()
-        
-        # English List/Time Ops
         if self.check('ADD'):
             return self.parse_add_to_list()
         if self.check('REMOVE'):
             return self.parse_remove_from_list()
         if self.check('WAIT'):
             return self.parse_wait()
-            
         if self.check('INCREMENT'):
             return self.parse_increment()
         elif self.check('DECREMENT'):
@@ -186,8 +172,6 @@ class Parser:
         elif self.check('AS'):
             return self.parse_as_long_as()
         elif self.check('ASK'):
-            # Standalone ask statement? e.g. ask "Questions?"
-            # Or ask is expression. If statement, maybe just expression statement.
             return self.parse_expression_statement()
         elif self.check('CHECK'):
             self.consume('CHECK')
@@ -367,18 +351,15 @@ class Parser:
         node = self.parse_make_expr()
         self.consume('NEWLINE')
         return node
-
     def parse_make_expr(self) -> Node:
         token = self.consume('MAKE')
         class_name = self.consume('ID').value
-        
         if self.check('BE'):
             self.consume('BE')
             value = self.parse_expression()
             node = Assign(class_name, value) # class_name is actually variable name here
             node.line = token.line
             return node
-
         args = []
         if self.check('LPAREN'):
             self.consume('LPAREN')
@@ -533,7 +514,6 @@ class Parser:
             self.consume('FUNCTION')
         else:
             start_token = self.consume('TO') # Fallback to existing 'TO' if not 'DEFINE'
-            
         name = self.consume('ID').value
         args = []
         while self.check('ID'):
@@ -593,12 +573,10 @@ class Parser:
                     prop_name = self.consume().value
                 else:
                     prop_name = self.consume('ID').value
-                
                 default_val = None
                 if self.check('ASSIGN'):
                     self.consume('ASSIGN')
                     default_val = self.parse_expression()
-                
                 properties.append((prop_name, default_val))
                 self.consume('NEWLINE')
             elif self.check('TO'):
@@ -699,14 +677,6 @@ class Parser:
              self.consume('ASSIGN')
              val = self.parse_expression()
              self.consume('NEWLINE')
-             # Convert simple assignment to PropertyAssign-like or specific set call?
-             # interpreter.visit_IndexAccess handles get.
-             # We need a node for IndexAssign. parser snippet doesn't show one.
-             # But visit_PropertyAssign handles dict keys. 
-             # Let's map d[k] = v to PropertyAssign(d, k, v)? 
-             # No, PropertyAssign takes member name as string. Here index handles expressions.
-             # I need to check if there is a node for this. 
-             # If not, I'll return Call('set', [VarAccess(name), index, val])
              return Call('set', [VarAccess(name), index, val])
         elif self.check('DOT'):
             self.consume('DOT')
@@ -717,7 +687,6 @@ class Parser:
                 value = self.parse_expression()
                 self.consume('NEWLINE')
                 return PropertyAssign(name, member, value)
-            
             args = []
             if self.check('LPAREN'):
                  self.consume('LPAREN')
@@ -731,7 +700,6 @@ class Parser:
                  node = MethodCall(name, member, args)
                  node.line = name_token.line
                  return node
-
             while not self.check('NEWLINE') and not self.check('EOF'):
                 args.append(self.parse_expression())
             self.consume('NEWLINE')
@@ -994,8 +962,6 @@ class Parser:
              token = self.consume('USE')
         else:
              token = self.consume('IMPORT')
-        
-        # Check for Python Import: use python "numpy" as np
         if self.check('ID') and self.peek().value == 'python':
              self.consume('ID') # consume 'python'
              if self.check('STRING'):
@@ -1010,7 +976,6 @@ class Parser:
                  return node
              else:
                  raise SyntaxError(f"Expected module name string after 'use python' at line {token.line}")
-
         if self.check('STRING'):
             path = self.consume('STRING').value
         else:
@@ -1025,19 +990,13 @@ class Parser:
             node = Import(path)
         node.line = token.line
         return node
-
     def parse_from_import(self) -> Node:
         token = self.consume('FROM')
-        
-        # from <module> ...
         if self.check('STRING'):
              module_name = self.consume('STRING').value
         else:
              module_name = self.consume('ID').value
-             
-        # ... import ...
         self.consume('IMPORT')
-        
         names = []
         while True:
             name = self.consume('ID').value
@@ -1045,14 +1004,11 @@ class Parser:
             if self.check('AS'):
                 self.consume('AS')
                 alias = self.consume('ID').value
-            
             names.append((name, alias))
-            
             if self.check('COMMA'):
                 self.consume('COMMA')
             else:
                 break
-                
         self.consume('NEWLINE')
         node = FromImport(module_name, names)
         node.line = token.line
@@ -1075,7 +1031,6 @@ class Parser:
         elif self.check('ELSE') or self.check('OTHERWISE'):
             if self.check('ELSE'): self.consume('ELSE')
             else: self.consume('OTHERWISE')
-            
             if self.check('COLON'): self.consume('COLON')
             self.consume('NEWLINE')
             self.consume('INDENT')
@@ -1086,7 +1041,6 @@ class Parser:
                 else_body.append(self.parse_statement())
             self.consume('DEDENT')
         return If(condition, body, else_body)
-
     def parse_elif(self) -> If:
         token = self.consume('ELIF')
         condition = self.parse_expression()
@@ -1114,7 +1068,6 @@ class Parser:
                 else_body.append(self.parse_statement())
             self.consume('DEDENT')
         return If(condition, body, else_body)
-
     def parse_while(self) -> While:
         start_token = self.consume('WHILE')
         condition = self.parse_expression()
@@ -1130,7 +1083,6 @@ class Parser:
         node = While(condition, body)
         node.line = start_token.line
         return node
-    
     def parse_repeat(self) -> Repeat:
         start_token = self.consume('REPEAT')
         count = self.parse_expression()
@@ -1147,7 +1099,6 @@ class Parser:
         node = Repeat(count, body)
         node.line = start_token.line
         return node
-    
     def parse_try(self) -> Try:
         start_token = self.consume('TRY')
         if self.check('COLON'):
@@ -1205,7 +1156,6 @@ class Parser:
              return node
         first_expr = self.parse_expression()
         skip_formatted()
-        
         if self.check('TO'):
             self.consume('TO')
             end_val = self.parse_expression()
@@ -1214,7 +1164,6 @@ class Parser:
             node = Call('range', [first_expr, end_val])
             node.line = token.line
             return node
-
         if self.check('FOR'):
             self.consume('FOR')
             var_name = self.consume('ID').value
@@ -1313,30 +1262,24 @@ class Parser:
     def parse_app(self) -> Node:
         token = self.consume('APP')
         title = self.consume('STRING').value
-        
         width = 500
         height = 400
         if self.check('SIZE'):
             self.consume('SIZE')
             width = int(self.consume('NUMBER').value)
             height = int(self.consume('NUMBER').value)
-        
         self.consume('COLON')
         self.consume('NEWLINE')
         self.consume('INDENT')
-        
         body = []
         while not self.check('DEDENT'):
             body.append(self.parse_ui_block())
             if self.check('NEWLINE'):
                 self.consume('NEWLINE')
-        
         self.consume('DEDENT')
         return App(title, width, height, body)
-
     def parse_ui_block(self) -> Node:
         token = self.peek()
-        
         if token.type in ('COLUMN', 'ROW'):
             layout_type = self.consume().value # column or row
             self.consume('COLON')
@@ -1348,7 +1291,6 @@ class Parser:
                if self.check('NEWLINE'): self.consume('NEWLINE')
             self.consume('DEDENT')
             return Layout(layout_type, children)
-            
         elif (token.type in ('BUTTON', 'INPUT', 'HEADING') or 
               (token.type == 'ID' and token.value == 'text')):
             if token.type == 'ID' and token.value == 'text':
@@ -1357,12 +1299,10 @@ class Parser:
             else:
                 widget_type = self.consume().value
             label = self.consume('STRING').value
-            
             var_name = None
             if self.check('AS'):
                 self.consume('AS')
                 var_name = self.consume('ID').value
-                
             event_handler = None
             if token.type == 'BUTTON' and self.check('DO'):
                 self.consume('DO')
@@ -1373,12 +1313,9 @@ class Parser:
                 while not self.check('DEDENT'):
                     event_handler.append(self.parse_statement())
                 self.consume('DEDENT')
-            
             return Widget(widget_type, label, var_name, event_handler)
-            
         else:
             raise SyntaxError(f"Unexpected token in UI block: {token.type} at line {token.line}")
-
     def parse_try(self):
         self.consume('TRY')
         self.consume('COLON')
@@ -1388,7 +1325,6 @@ class Parser:
         while not self.check('DEDENT'):
             try_body.append(self.parse_statement())
         self.consume('DEDENT')
-        
         catch_var = "e"
         catch_body = []
         if self.check('CATCH'):
@@ -1401,7 +1337,6 @@ class Parser:
             while not self.check('DEDENT'):
                 catch_body.append(self.parse_statement())
             self.consume('DEDENT')
-            
         always_body = None
         if self.check('ALWAYS'):
             self.consume('ALWAYS')
@@ -1412,14 +1347,12 @@ class Parser:
             while not self.check('DEDENT'):
                 always_body.append(self.parse_statement())
             self.consume('DEDENT')
-            
         if always_body:
             node = TryAlways(try_body, catch_var, catch_body, always_body)
         else:
             node = Try(try_body, catch_var, catch_body)
         node.line = try_body[0].line if try_body else 0
         return node
-
     def parse_factor_simple(self) -> Node:
         token = self.peek()
         if token.type == 'ASK':
@@ -1549,7 +1482,6 @@ class Parser:
             node = Spawn(right)
             node.line = op.line
             return node
-
         elif token.type == 'HOW':
             token = self.consume()
             self.consume('MANY')
@@ -1589,7 +1521,6 @@ class Parser:
              node = FileRead(path)
              node.line = token.line
              return node
-
         elif token.type == 'UPPER':
             return self.parse_upper()
         elif token.type == 'DATE':
@@ -1639,13 +1570,9 @@ class Parser:
                     return self._parse_natural_list()
                 elif self.peek(1).type == 'UNIQUE' and self.peek(2).type == 'SET' and self.peek(3).type == 'OF':
                     return self._parse_natural_set()
-            
-            # Contextual Keywords (previously reserved)
             if token.value == 'sum' and self.peek(1).type == 'OF':
                 return self.parse_sum()
-                
             if token.value == 'count':
-                # Check for 'count of <expr>'
                 if self.peek(1).type == 'OF':
                     self.consume() # count
                     self.consume('OF')
@@ -1653,9 +1580,7 @@ class Parser:
                     node = Call('len', [expr])
                     node.line = token.line
                     return node
-            
             if token.value == 'length':
-                # Check for 'length of <expr>'
                 if self.peek(1).type == 'OF':
                     self.consume() # length
                     self.consume('OF')
@@ -1663,7 +1588,6 @@ class Parser:
                     node = Call('len', [expr])
                     node.line = token.line
                     return node
-
             if token.value == 'numbers' and self.peek(1).type == 'FROM':
                 return self.parse_numbers_range()
             self.consume()
@@ -1672,9 +1596,7 @@ class Parser:
             if self.check('DOT'):
                 self.consume('DOT')
                 method_name = self.consume().value
-            
             args = []
-            # Check for C-style function call: func(arg1, arg2)
             if self.check('LPAREN'):
                 self.consume('LPAREN')
                 kwargs = []
@@ -1687,7 +1609,6 @@ class Parser:
                              kwargs.append((k, v))
                         else:
                              args.append(self.parse_expression())
-                        
                         if self.check('COMMA'):
                             self.consume('COMMA')
                         else:
@@ -1699,30 +1620,12 @@ class Parser:
                     node = Call(instance_name, args, kwargs)
                 node.line = token.line
                 return node
-
-            # Fallback to command-style arguments: func arg1 arg2
-            # But only if NOT a property access (method_name w/o args is property access, 
-            # but if it was method call it would use parens ideally, or spaces?)
-            # Existing logic supported 'func arg1 arg2'.
-            # We keep it for backward compatibility e.g. 'echo 123'.
-            
             force_call = False
             while True:
                 next_t = self.peek()
-                # If we see LPAREN now, it's ambiguous if we didn't handle it above.
-                # But 'func (1)' is func called with 1 arg which is (1).
-                # 'func (1, 2)' would fail in old logic too.
-                # So the above block handles the explicit invocation.
-                # This loop is for 'func 1 2'.
-                
-                # Check for keywords or invalid start tokens
                 if next_t.type not in ('NUMBER', 'STRING', 'REGEX', 'ID', 'LPAREN', 'INPUT', 'ASK', 'YES', 'NO', 'LBRACKET', 'LBRACE'):
                     break
-                
-                # Special case: if we see LPAREN, is it part of command args?
-                # e.g. 'func (1+2)' -> args=[(1+2)].
                 args.append(self.parse_factor_simple())
-
             if method_name:
                 if args:
                     node = MethodCall(instance_name, method_name, args)
@@ -1730,12 +1633,10 @@ class Parser:
                     node = PropertyAccess(instance_name, method_name)
                 node.line = token.line
                 return node
-            
             if args:
                 node = Call(instance_name, args)
                 node.line = token.line
                 return node
-
             node = VarAccess(instance_name)
             node.line = token.line
             return node
@@ -1892,8 +1793,6 @@ class Parser:
         if self.peek().type in ('EQ', 'NEQ', 'GT', 'LT', 'GE', 'LE', 'IS', 'MATCHES', 'GREATER', 'LESS', 'EQUAL', 'CONTAINS', 'EMPTY'):
             op_token = self.consume()
             op_val = op_token.value
-            
-            # Handle "is greater/less/equal"
             if op_token.type == 'IS':
                 if self.check('GREATER'):
                     self.consume('GREATER'); self.consume('THAN')
@@ -1909,19 +1808,16 @@ class Parser:
                     op_val = '!='
                 elif self.check('EMPTY'):
                     self.consume('EMPTY')
-                    # is empty -> Call('empty', [left])
                     node = Call('empty', [left])
                     node.line = op_token.line
                     return node
                 else:
                     op_val = '=='
             elif op_token.type == 'CONTAINS':
-                # list contains item -> Call('contains', [list, item])
                 right = self.parse_arithmetic()
                 node = Call('contains', [left, right])
                 node.line = op_token.line
                 return node
-
             right = self.parse_arithmetic()
             node = BinOp(left, op_val, right)
             node.line = op_token.line
@@ -1932,10 +1828,8 @@ class Parser:
         while self.peek().type in ('PLUS', 'MINUS'):
             op_token = self.consume()
             op_val = op_token.value
-            # Normalize to symbols
             if op_token.type == 'PLUS': op_val = '+'
             if op_token.type == 'MINUS': op_val = '-'
-            
             right = self.parse_term()
             new_node = BinOp(left, op_val, right)
             new_node.line = op_token.line
@@ -1944,24 +1838,18 @@ class Parser:
     def parse_term(self) -> Node:
         left = self.parse_factor()
         while self.peek().type in ('MUL', 'DIV', 'MOD', 'TIMES'):
-            # Disambiguate "repeat 3 TIMES" vs "3 TIMES 4"
             if self.peek().type == 'TIMES':
                 next_tok = self.peek(1)
                 if next_tok.type in ('COLON', 'NEWLINE'):
                     break
-            
             op_token = self.consume()
             op_val = op_token.value
-            
-            # Normalize
             if op_token.type == 'MUL': op_val = '*'
             if op_token.type == 'TIMES': op_val = '*'
             if op_token.type == 'DIV': 
                 op_val = '/'
                 if self.check('BY'): self.consume('BY') # Handle "divided by"
-
             if op_token.type == 'MOD': op_val = '%'
-
             right = self.parse_factor()
             new_node = BinOp(left, op_val, right)
             new_node.line = op_token.line
@@ -2078,7 +1966,6 @@ class Parser:
         token = self.consume('APPEND')
         content = self.parse_expression()
         self.consume('TO')
-        
         if self.check('FILE'):
             self.consume('FILE')
             path = self.parse_expression()
@@ -2087,44 +1974,25 @@ class Parser:
             node.line = token.line
             return node
         else:
-            # Assuming list append / smart add
             list_expr = self.parse_expression()
             self.consume('NEWLINE')
-            
             if isinstance(list_expr, VarAccess):
                 node = Assign(list_expr.name, Call('append', [list_expr, content]))
             else:
                 node = Call('append', [list_expr, content])
-            
             node.line = token.line
             return node
-
-
     def parse_increment(self) -> Assign:
-
         token = self.consume('INCREMENT')
-
         name = self.consume('ID').value
-
         amount = Number(1)
-
         if self.check('BY'):
-
             self.consume('BY')
-
             amount = self.parse_expression()
-
         self.consume('NEWLINE')
-
         node = Assign(name, BinOp(VarAccess(name), '+', amount))
-
         node.line = token.line
-
         return node
-
-
-
-
     def parse_decrement(self) -> Assign:
         token = self.consume('DECREMENT')
         name = self.consume('ID').value
@@ -2136,7 +2004,6 @@ class Parser:
         node = Assign(name, BinOp(VarAccess(name), '-', amount))
         node.line = token.line
         return node
-
     def parse_subtract(self) -> Assign:
         token = self.consume('SUBTRACT')
         amount = self.parse_expression()
@@ -2147,94 +2014,49 @@ class Parser:
         node = Assign(name, BinOp(VarAccess(name), '-', amount))
         node.line = token.line
         return node
-
-
-
     def parse_multiply(self) -> Assign:
-
         token = self.consume('MULTIPLY')
-
         name = self.consume('ID').value
-
         self.consume('BY')
-
         amount = self.parse_expression()
-
         self.consume('NEWLINE')
-
         node = Assign(name, BinOp(VarAccess(name), '*', amount))
-
         node.line = token.line
-
         return node
-
-
-
     def parse_divide(self) -> Assign:
-
         token = self.consume('DIVIDE')
-
         name = self.consume('ID').value
-
         self.consume('BY')
-
         amount = self.parse_expression()
-
         self.consume('NEWLINE')
-
         node = Assign(name, BinOp(VarAccess(name), '/', amount))
-
         node.line = token.line
-
         return node
-
-
-
     def parse_set(self) -> Assign:
-
         token = self.consume('SET')
-
         name = self.consume('ID').value
-
         self.consume('TO')
-
         value = self.parse_expression()
-
         self.consume('NEWLINE')
-
         node = Assign(name, value)
-
         node.line = token.line
-
         return node
-
-
-
     def parse_sum(self) -> Node:
         token = self.consume('ID')
         self.consume('OF')
-        
-        # Check for 'numbers from ...' (contextual keyword 'numbers')
         if self.check('ID') and self.peek().value == 'numbers':
              range_node = self.parse_numbers_range()
-             # range_node is Call('range_list', ...)
-             # We want Call('sum', [range_node])
              node = Call('sum', [range_node])
              node.line = token.line
              return node
-             
         expr = self.parse_expression()
         node = Call('sum', [expr])
         node.line = token.line
         return node
-
-
-
     def parse_upper(self) -> Node:
         token = self.consume('UPPER')
         expr = self.parse_expression()
         only_letters = Boolean(False)
-
         if self.check('ID') and self.peek().value == 'only':
             self.consume() # consume 'only'
             if self.check('ID') and self.peek().value == 'letters':
@@ -2243,42 +2065,29 @@ class Parser:
         node = Call('upper', [expr, only_letters])
         node.line = token.line
         return node
-
-
-
     def parse_numbers_range(self) -> Node:
-        # Expect 'numbers' as ID
         token = self.peek()
         if self.check('ID') and self.peek().value == 'numbers':
              self.consume()
         else:
-             # Should be 'numbers' but if called from parse_sum we assume check passed.
-             # If called from Factor loop...
              pass 
-        
         self.consume('FROM')
         start = self.parse_expression()
         self.consume('TO')
         end = self.parse_expression()
-        
         condition = None
         if self.check('ID') and self.peek().value == 'that':
             self.consume() # that
             if self.check('ID') and self.peek().value == 'are':
                  self.consume() # are
-            
             if self.check('ID') and self.peek().value == 'prime':
                 self.consume() # prime
                 condition = String('prime')
             elif self.check('ID') and self.peek().value == 'digits':
                 self.consume() # digits
                 condition = String('digits')
-                
         elif self.check('WHEN'):
              self.consume('WHEN')
-             # 'when even' -> check for ID 'even' or expression?
-             # User example: 'when even'. Implicit variable?
-             # Let's verify repro: 'when even'
              if self.check('ID') and self.peek().value == 'even':
                  self.consume()
                  condition = String('even')
@@ -2286,9 +2095,7 @@ class Parser:
                  self.consume()
                  condition = String('odd')
              else:
-                 # TODO: handle generic expression filter if needed
                  pass
-                 
         node = Call('range_list', [start, end, condition if condition else Boolean(False)])
         node.line = token.line
         return node
@@ -2298,17 +2105,12 @@ class Parser:
         self.consume('TO')
         list_expr = self.parse_expression()
         self.consume('NEWLINE')
-        
-        # If adding to a variable, assign the result back (to support numbers/strings via smart_add)
         if isinstance(list_expr, VarAccess):
-            # x = append(x, item) -> smart_add(x, item)
             node = Assign(list_expr.name, Call('append', [list_expr, item]))
         else:
             node = Call('append', [list_expr, item])
-            
         node.line = token.line
         return node
-
     def parse_remove_from_list(self) -> Node:
         token = self.consume('REMOVE')
         item = self.parse_expression()
@@ -2318,32 +2120,24 @@ class Parser:
         node = Call('remove', [list_expr, item])
         node.line = token.line
         return node
-        
     def parse_wait(self) -> Node:
         token = self.consume('WAIT')
         value = self.parse_expression()
         if self.check('SECOND'): self.consume('SECOND')
         elif self.check('SECONDS'): self.consume('SECONDS') # Assuming 'SECONDS' token maps to SECOND?
-        # Actually I need to check lexer mapping for MINUTES/SECONDS.
-        # Lexer has: 'minute': 'MINUTE', 'minutes': 'MINUTE', 'second': 'SECOND', 'seconds': 'SECOND'
-        
         elif self.check('MINUTE'): 
             self.consume('MINUTE')
             value = BinOp(value, '*', Number(60))
-        
         self.consume('NEWLINE')
         node = Call('wait', [value])
         node.line = token.line
         return node
-
     def parse_add_distinguish(self) -> Node:
-        # Distinguish "ADD <expr> TO <list>" vs "ADD <component> ..."
         tok = self.peek(1)
         if tok.type in ('BUTTON', 'HEADING', 'PARAGRAPH', 'IMAGE', 'APP', 'PAGE', 'Use', 'INPUT', 'TEXT'):
              return self.parse_add_to()
         else:
              return self.parse_add_to_list()
-
     def parse_make_assignment(self) -> Node:
         token = self.consume('MAKE')
         name = self.consume('ID').value
@@ -2353,7 +2147,6 @@ class Parser:
         node = Assign(name, value)
         node.line = token.line
         return node
-
     def parse_as_long_as(self) -> While:
         start_token = self.consume('AS')
         self.consume('LONG')
@@ -2371,4 +2164,3 @@ class Parser:
         node = While(condition, body)
         node.line = start_token.line
         return node
-

@@ -373,7 +373,6 @@ class Compiler:
             else:
                 args.append(prop)
                 assigns.append(f"self.{prop} = {prop}")
-
         if not assigns:
             assigns = ["pass"]
         code += f"{self.indent()}def __init__({', '.join(args)}):\n"

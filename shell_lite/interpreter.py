@@ -240,8 +240,10 @@ class Interpreter:
         for k, v in self.builtins.items():
             self.global_env.set(k, v)
     def _make_tag_fn(self, tag_name):
-        def tag_fn(*args):
+        def tag_fn(*args, **kwargs):
             attrs = {}
+            # Add kwargs directly as attributes
+            attrs.update(kwargs)
             content = []
             for arg in args:
                 if isinstance(arg, dict):
@@ -1502,7 +1504,7 @@ class Interpreter:
                             self.wfile.write(str(e).encode())
                     except: pass
         server = ReusableHTTPServer(('0.0.0.0', port_val), ShellLiteHandler)
-        print(f"\n  ShellLite Server v0.5.3 is running!")
+        print(f"\n  ShellLite Server v0.5.3.1 is running!")
         print(f"  \u001b[1;36m➜\u001b[0m  Local:   \u001b[1;4;36mhttp://localhost:{port_val}/\u001b[0m\n")
         try: server.serve_forever()
         except KeyboardInterrupt: 

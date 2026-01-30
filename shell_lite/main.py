@@ -17,7 +17,6 @@ def execute_source(source: str, interpreter: Interpreter):
         lexer = Lexer(source)
         tokens = lexer.tokenize()
         if os.environ.get('USE_LEGACY_PARSER') == '1':
-            from .parser import Parser
             parser = Parser(tokens)
         else:
             from .parser_gbp import GeometricBindingParser

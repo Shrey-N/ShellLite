@@ -1,0 +1,8 @@
+# Test using the regular function syntax
+function greet using name
+    say "Hello"
+    say name
+
+say "Calling greet..."
+greet "Claude"
+say "Done"

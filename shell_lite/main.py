@@ -16,11 +16,12 @@ def execute_source(source: str, interpreter: Interpreter):
     try:
         lexer = Lexer(source)
         tokens = lexer.tokenize()
-        if os.environ.get('USE_GBP') == '1':
+        if os.environ.get('USE_LEGACY_PARSER') == '1':
+            from .parser import Parser
+            parser = Parser(tokens)
+        else:
             from .parser_gbp import GeometricBindingParser
             parser = GeometricBindingParser(tokens)
-        else:
-            parser = Parser(tokens)
         statements = parser.parse()
         for stmt in statements:
             interpreter.visit(stmt)
@@ -150,7 +151,7 @@ def install_globally():
             return
         ps_cmd = f'$oldPath = [Environment]::GetEnvironmentVariable("Path", "User"); if ($oldPath -notlike "*ShellLite*") {{ [Environment]::SetEnvironmentVariable("Path", "$oldPath;{install_dir}", "User") }}'
         subprocess.run(["powershell", "-Command", ps_cmd], capture_output=True)
-        print(f"\n[SUCCESS] ShellLite (v0.5.2) is installed!")
+        print(f"\n[SUCCESS] ShellLite (v0.5.3) is installed!")
         print(f"Location: {install_dir}")
         print("\nIMPORTANT STEP REQUIRED:")
         print("1. Close ALL open terminal windows (CMD, PowerShell, VS Code).")

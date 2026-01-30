@@ -1,0 +1,3 @@
+# Minimal test - just start website
+say "Starting server test..."
+start website

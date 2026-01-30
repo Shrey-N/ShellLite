@@ -1,0 +1,9 @@
+# Test script for start website command
+say "Testing start website command parsing..."
+
+# Define a simple route
+on request to "/"
+    say "Hello from test!"
+
+# This is the line that was failing
+start website

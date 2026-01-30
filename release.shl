@@ -1,3 +1,0 @@
-say "Build Release v0.5.1"
-use python "os"
-os.system("python -m build")

@@ -150,7 +150,7 @@ def install_globally():
             return
         ps_cmd = f'$oldPath = [Environment]::GetEnvironmentVariable("Path", "User"); if ($oldPath -notlike "*ShellLite*") {{ [Environment]::SetEnvironmentVariable("Path", "$oldPath;{install_dir}", "User") }}'
         subprocess.run(["powershell", "-Command", ps_cmd], capture_output=True)
-        print(f"\n[SUCCESS] ShellLite (v0.04.6.8) is installed!")
+        print(f"\n[SUCCESS] ShellLite (v0.5.1) is installed!")
         print(f"Location: {install_dir}")
         print("\nIMPORTANT STEP REQUIRED:")
         print("1. Close ALL open terminal windows (CMD, PowerShell, VS Code).")

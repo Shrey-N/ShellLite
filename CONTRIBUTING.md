@@ -25,7 +25,7 @@ First off, thank you for considering contributing to ShellLite! It's people like
 4. **Install dependencies**:
    ```bash
    pip install -e .
-   pip install prompt_toolkit build twine
+   pip install prompt_toolkit build twine llvmlite pytest
    ```
 
 ## Development Workflow
@@ -41,11 +41,16 @@ First off, thank you for considering contributing to ShellLite! It's people like
 
 ## Running Tests
 
-ShellLite has a suite of tests located in the `tests_suite` directory.
+ShellLite has a suite of tests located in the `tests` directory.
 
-To run a specific test:
+To run a specific test file:
 ```bash
-python -m shell_lite.main tests_suite/core/math.shl
+python -m shell_lite.main tests/core/math.shl
+```
+
+To run the test suite with pytest:
+```bash
+pytest tests/
 ```
 
 Please verify that the core and advanced features work as expected before submitting.

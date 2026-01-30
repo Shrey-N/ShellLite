@@ -15,6 +15,8 @@ class Lexer:
         self.current_char_index = 0
         self.line_number = 1
         self.indent_stack = [0]
+        self.bracket_depth = 0
+
     def tokenize(self) -> List[Token]:
         source = self._remove_multiline_comments(self.source_code)
         lines = source.split('\n')
@@ -27,21 +29,49 @@ class Lexer:
             if stripped_line.startswith('#'):
                 continue
             if indent_level > self.indent_stack[-1]:
-                self.indent_stack.append(indent_level)
-                self.tokens.append(Token('INDENT', '', self.line_number, indent_level + 1))
+                if self.bracket_depth == 0:
+                    self.indent_stack.append(indent_level)
+                    self.tokens.append(Token('INDENT', '', self.line_number, indent_level + 1))
             elif indent_level < self.indent_stack[-1]:
-                while indent_level < self.indent_stack[-1]:
-                    self.indent_stack.pop()
-                    self.tokens.append(Token('DEDENT', '', self.line_number, indent_level + 1))
-                if indent_level != self.indent_stack[-1]:
-                    raise IndentationError(f"Unindent does not match any outer indentation level on line {self.line_number}")
+                if self.bracket_depth == 0:
+                    while indent_level < self.indent_stack[-1]:
+                        self.indent_stack.pop()
+                        self.tokens.append(Token('DEDENT', '', self.line_number, indent_level + 1))
+                    if indent_level != self.indent_stack[-1]:
+                        raise IndentationError(f"Unindent does not match any outer indentation level on line {self.line_number}")
             self.tokenize_line(stripped_line, indent_level + 1)
-            self.tokens.append(Token('NEWLINE', '', self.line_number, len(line) + 1))
+            if self.bracket_depth == 0:
+                self.tokens.append(Token('NEWLINE', '', self.line_number, len(line) + 1))
         while len(self.indent_stack) > 1:
             self.indent_stack.pop()
             self.tokens.append(Token('DEDENT', '', self.line_number, 1))
         self.tokens.append(Token('EOF', '', self.line_number, 1))
+        # Post-process: Convert BEGIN/END to INDENT/DEDENT
+        self.tokens = self._convert_begin_end(self.tokens)
         return self.tokens
+    
+    def _convert_begin_end(self, tokens: List[Token]) -> List[Token]:
+        """Convert BEGIN/END keywords to INDENT/DEDENT for uniform parsing."""
+        result = []
+        i = 0
+        while i < len(tokens):
+            token = tokens[i]
+            if token.type == 'BEGIN':
+                # Remove preceding NEWLINE if present (since begin is on its own line)
+                if result and result[-1].type == 'NEWLINE':
+                    result.pop()
+                # Just add INDENT (the newline was already there from previous line)
+                result.append(Token('INDENT', '', token.line, token.column))
+            elif token.type == 'END':
+                # Add DEDENT
+                result.append(Token('DEDENT', '', token.line, token.column))
+                # Skip the NEWLINE after end if present
+                if i + 1 < len(tokens) and tokens[i + 1].type == 'NEWLINE':
+                    i += 1  # Skip the next NEWLINE
+            else:
+                result.append(token)
+            i += 1
+        return result
     def _remove_multiline_comments(self, source: str) -> str:
         result = []
         i = 0
@@ -150,6 +180,15 @@ class Lexer:
             }
             if char in single_char_tokens:
                 self.tokens.append(Token(single_char_tokens[char], char, self.line_number, current_col))
+                
+                # Track bracket depth here too
+                if char in '([{':
+                    self.bracket_depth += 1
+                elif char in ')]}':
+                    self.bracket_depth -= 1
+                    if self.bracket_depth < 0:
+                        self.bracket_depth = 0
+
                 pos += 1
                 continue
             if char.isalpha() or char == '_':
@@ -167,6 +206,7 @@ class Lexer:
                         'check': 'CHECK',
                         'unless': 'UNLESS', 'when': 'WHEN', 'otherwise': 'OTHERWISE',
                         'then': 'THEN', 'do': 'DO',
+                        'begin': 'BEGIN', 'end': 'END',
                         'print': 'PRINT', 'say': 'SAY', 'show': 'SAY',
                         'input': 'INPUT', 'ask': 'ASK',
                         'to': 'TO', 'can': 'TO',
@@ -246,8 +286,4 @@ class Lexer:
                     self.tokens.append(Token(token_type, value, self.line_number, current_col))
                     pos += len(value)
                     continue
-            if char in single_char_tokens:
-                self.tokens.append(Token(single_char_tokens[char], char, self.line_number, current_col))
-                pos += 1
-                continue
             raise SyntaxError(f"Illegal character '{char}' at line {self.line_number}")

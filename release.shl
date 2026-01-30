@@ -1,0 +1,41 @@
+say "Starting release preparation for v0.5.1..."
+
+use python "os"
+use python "shutil"
+
+# 1. Clean old builds
+say "--- Cleaning old builds ---"
+try
+    if os.path.exists("dist")
+        shutil.rmtree("dist")
+    if os.path.exists("build")
+        shutil.rmtree("build")
+    if os.path.exists("shell_lite.egg-info")
+        shutil.rmtree("shell_lite.egg-info")
+except Exception as e
+    say "Error cleaning: " + str(e)
+
+# 2. Build
+say "--- Building package ---"
+# We use os.system to run the build command
+status = os.system("python -m build")
+
+if status != 0
+    say "Build failed! Please ensure 'build' is installed (pip install build)"
+    # Stop execution if failed
+    return
+
+# 3. Verify
+say "--- Verifying package ---"
+if os.path.exists("dist")
+    files = os.listdir("dist")
+    say "Created files:"
+    for f in files
+        say " - " + f
+else
+    say "No dist folder created!"
+    return
+
+say "\n--- Release Ready! ---"
+say "To upload to PyPI, run:"
+say "twine upload dist/*"

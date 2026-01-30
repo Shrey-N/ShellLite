@@ -11,6 +11,7 @@ class GeoNode:
     tokens: List[Token] = field(default_factory=list)
     children: List['GeoNode'] = field(default_factory=list)
     parent: Optional['GeoNode'] = None
+    
     def __repr__(self):
         return f"GeoNode(line={self.line}, indent={self.indent_level}, head={self.head_token.type})"
 class GeometricBindingParser:
@@ -39,19 +40,6 @@ class GeometricBindingParser:
         Phase 1: Scans tokens to build GeoNodes.
         Phase 2: Links them into a tree based on nesting.
         """
-        logical_lines = []
-        current_line_tokens = []
-        for token in self.tokens:
-            if token.type == 'NEWLINE':
-                if current_line_tokens:
-                    logical_lines.append(current_line_tokens)
-                current_line_tokens = []
-            elif token.type in ('INDENT', 'DEDENT', 'EOF'):
-                pass # logic handled below in a smarter way?
-            else:
-                current_line_tokens.append(token)
-        if current_line_tokens:
-             logical_lines.append(current_line_tokens)
         node_stack: List[GeoNode] = [] # The active parents
         current_tokens_accumulator = []
         current_node: Optional[GeoNode] = None
@@ -199,6 +187,31 @@ class GeometricBindingParser:
                 values.append(Number(int(t.value) if '.' not in t.value else float(t.value)))
             elif t.type == 'STRING':
                 values.append(String(t.value))
+            elif t.type == 'LBRACKET':
+                # Consumed nested list
+                depth = 1
+                j = i + 1
+                elements_tokens = []
+                current_elem = []
+                while j < len(tokens):
+                    if tokens[j].type == 'LBRACKET': depth += 1
+                    elif tokens[j].type == 'RBRACKET': depth -= 1
+                    
+                    if depth == 0:
+                        if current_elem: elements_tokens.append(current_elem)
+                        break
+                    
+                    if tokens[j].type == 'COMMA' and depth == 1:
+                        elements_tokens.append(current_elem)
+                        current_elem = []
+                    else:
+                        current_elem.append(tokens[j])
+                    j += 1
+                
+                # Parse elements
+                items = [self.parse_expr_iterative(elem) for elem in elements_tokens if elem]
+                values.append(ListVal(items))
+                i = j # Advance past list
             elif t.type == 'ID':
                 if i+1 < len(tokens) and tokens[i+1].type == 'LPAREN':
                     values.append(VarAccess(t.value))

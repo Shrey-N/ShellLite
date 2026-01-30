@@ -91,6 +91,10 @@ class GeometricBindingParser:
             return self.bind_return(node)
         elif head_type == 'REPEAT':
             return self.bind_repeat(node)
+        elif head_type == 'START':
+            return self.bind_start(node)
+        elif head_type == 'LISTEN':
+            return self.bind_listen(node)
         elif head_type == 'ID':
             if any(t.type == 'ASSIGN' for t in node.tokens):
                 return self.bind_assignment(node)
@@ -139,6 +143,17 @@ class GeometricBindingParser:
         return Assign(name, value)
     def bind_expression_stmt(self, node: GeoNode) -> Any:
         return self.parse_expr_iterative(node.tokens)
+    def bind_start(self, node: GeoNode) -> Listen:
+        # 'start website' -> Listen(8080)
+        # We could parse args if needed, but for now we assume default
+        return Listen(Number(8080))
+    def bind_listen(self, node: GeoNode) -> Listen:
+        # 'listen 8080' or 'listen port 8080'
+        expr_tokens = self._extract_expr_tokens(node.tokens, start=1)
+        if expr_tokens and expr_tokens[0].type == 'PORT':
+             expr_tokens.pop(0)
+        port = self.parse_expr_iterative(expr_tokens)
+        return Listen(port)
     def bind_func(self, node: GeoNode) -> FunctionDef:
         start = 1
         if node.tokens[0].type == 'DEFINE': start = 2

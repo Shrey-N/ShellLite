@@ -6,7 +6,7 @@
 
 ShellLite is a modern programming language designed to prioritize human readability. It replaces complex syntax with natural English commands, making software development accessible and maintainable. With version 0.05.0, ShellLite now supports native compilation via LLVM alongside its interpreted mode.
 
-[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![License: GPL v3](https://img.shields.io/badge/License-GPLv3--with--classpath--exception-blue.svg)](https://www.gnu.org/licenses/gpl-3.0.html)
 [![Version](https://img.shields.io/badge/version-0.05.0-green.svg)]()
 
 ---
@@ -454,7 +454,7 @@ See [SECURITY.md](SECURITY.md) for reporting security vulnerabilities.
 
 ## License
 
-MIT License - See [LICENSE](LICENSE) for details.
+GNU GPL V3 With Class Exception License - See [LICENSE](LICENSE) for details.
 
 ---
 

@@ -1396,6 +1396,16 @@ class Interpreter:
         class ReusableHTTPServer(ThreadingHTTPServer):
             allow_reuse_address = True
             daemon_threads = True
+
+            def handle_error(self, request, client_address):
+                # Suppress output for connection resets (common with browser disconnects)
+                try:
+                    _, exc, _ = sys.exc_info()
+                    if isinstance(exc, (ConnectionResetError, BrokenPipeError)):
+                        return
+                except:
+                    pass
+                super().handle_error(request, client_address)
         class ShellLiteHandler(BaseHTTPRequestHandler):
             def log_message(self, format, *args): pass 
             def do_GET(self): 
@@ -1503,7 +1513,7 @@ class Interpreter:
                             self.wfile.write(str(e).encode())
                     except: pass
         server = ReusableHTTPServer(('0.0.0.0', port_val), ShellLiteHandler)
-        print(f"\n  ShellLite Server v0.5.3.2 is running!")
+        print(f"\n  ShellLite Server v0.5.3.4 is running!")
         print(f"  \u001b[1;36m➜\u001b[0m  Local:   \u001b[1;4;36mhttp://localhost:{port_val}/\u001b[0m\n")
         try: server.serve_forever()
         except KeyboardInterrupt: 

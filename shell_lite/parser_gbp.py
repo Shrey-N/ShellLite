@@ -105,6 +105,8 @@ class GeometricBindingParser:
             return self.bind_return(node)
         elif head_type == 'REPEAT':
             return self.bind_repeat(node)
+        elif head_type == 'FOREVER':
+            return self.bind_forever(node)
         elif head_type == 'START':
             return self.bind_start(node)
         elif head_type == 'LISTEN':
@@ -139,6 +141,112 @@ class GeometricBindingParser:
         count = self.parse_expr_iterative(expr_tokens)
         body = [self.bind_node(child) for child in node.children]
         return Repeat(count, body)
+    
+    def bind_forever(self, node: GeoNode) -> Forever:
+        body = [self.bind_node(child) for child in node.children]
+        return Forever(body)
+
+    def bind_for(self, node: GeoNode) -> Node:
+        # 'for i in range 1 10' or 'for item in list'
+        # node.tokens starts with FOR/LOOP
+        # Next should be ID (var name)
+        if len(node.tokens) < 3: 
+             return None # Error?
+             
+        var_name = node.tokens[1].value
+        
+        # Check for 'IN'
+        in_index = -1
+        for i, t in enumerate(node.tokens):
+            if t.type == 'IN':
+                in_index = i
+                break
+        
+        if in_index == -1:
+             # Maybe 'loop 10 times'? No, that's Repeat (handled by bind_repeat if HEAD is REPEAT)
+             # But if HEAD is LOOP?
+             if node.head_token.type == 'LOOP':
+                 # loop 200 times
+                 # Delegated to bind_repeat logic if we can re-route, OR implement here
+                 # Look for TIMES
+                 if node.tokens[-1].type == 'TIMES':
+                     expr_tokens = self._extract_expr_tokens(node.tokens, start=1)
+                     expr_tokens.pop() # remove TIMES
+                     count = self.parse_expr_iterative(expr_tokens)
+                     body = [self.bind_node(child) for child in node.children]
+                     return Repeat(count, body)
+             return None
+
+        # It is a FOR loop
+        # Check for RANGE
+        range_index = -1
+        for i, t in enumerate(node.tokens):
+            if t.type == 'RANGE':
+                range_index = i
+                break
+                
+        if range_index != -1:
+             # for i in range 1 10
+             # Extract args after RANGE
+             args_tokens = node.tokens[range_index+1:]
+             # We need to split by space/comma? parse_expr_iterative might consume all?
+             # Range takes start, end, step.
+             # We can cheat and wrap them in a Call to 'range'?
+             # Or parse sub-expressions.
+             # Simplification: Assume numbers/vars separated by nothing (since lexer doesn't produce commas for spaces)
+             # But parse_expr_iterative consumes everything.
+             # We need to split manually if they are distinct expressions.
+             # Let's try to parse one expr, see where it ends? Not easy with shunting yard.
+             
+             # Fallback: Create a Call('range', ...)
+             # Actually, interpreter expects 'count' for For loop? 
+             # No, AST For node: For(count, body) -> interpreted as Repeat?
+             # Wait, AST For(count, body) vs ForIn(var_name, iterable, body)
+             
+             # Let's see AST definition.
+             pass 
+
+        # It is likely a ForIn
+        # iterable is everything after IN
+        iterable_tokens = self._extract_expr_tokens(node.tokens, start=in_index+1)
+        iterable = self.parse_expr_iterative(iterable_tokens)
+        body = [self.bind_node(child) for child in node.children]
+        
+        # Handle 'range 1 10' as an iterable (Call to range)
+        if node.tokens[in_index+1].type == 'RANGE':
+             # tokens: FOR i IN RANGE 1 10
+             # We want Call('range', [1, 10])
+             # Extract numbers after RANGE
+             args_tokens = self._extract_expr_tokens(node.tokens, start=in_index+2)
+             # Assumption: args are space separated expressions. 
+             # parse_expr_iterative consumes all. 
+             # We need to manually split if there are multiple args?
+             # But 'range 1 10' in ShellLite usually means two numbers.
+             # If we just Pass all tokens to parse_expr_iterative, it might just return the first one if not connected by operator.
+             # For 'range 1 10', we have NUMBER 1, NUMBER 10.
+             # We need to build a list of args.
+             range_args = []
+             k = 0
+             while k < len(args_tokens):
+                 # Try to parse one expression? 
+                 # This is hard with current parser structure.
+                 # SIMPLE HACK: Just take the next two tokens as numbers?
+                 # Or treat them as separate expression?
+                 if args_tokens[k].type in ('NUMBER', 'STRING', 'ID'):
+                     t = args_tokens[k]
+                     val = None
+                     if t.type == 'NUMBER':
+                         val = Number(int(t.value) if '.' not in t.value else float(t.value))
+                     elif t.type == 'STRING':
+                         val = String(t.value)
+                     elif t.type == 'ID':
+                         val = VarAccess(t.value)
+                     if val: range_args.append(val)
+                 k += 1
+             
+             iterable = Call('range', range_args)
+             
+        return ForIn(var_name, iterable, body)
     def bind_print(self, node: GeoNode) -> Print:
         expr_tokens = self._extract_expr_tokens(node.tokens, start=1)
         expr = self.parse_expr_iterative(expr_tokens)
@@ -352,7 +460,39 @@ class GeometricBindingParser:
                 i = j # Advance past list
             elif t.type == 'ID':
                 if i+1 < len(tokens) and tokens[i+1].type == 'LPAREN':
-                    values.append(VarAccess(t.value))
+                     # Function call: ID(args)
+                     name = t.value
+                     
+                     # Find matching RPAREN
+                     depth = 1
+                     j = i + 2 # Skip ID and LPAREN
+                     elements_tokens = []
+                     current_elem = []
+                     
+                     arg_tokens_start = j
+                     # Check for empty call "func()"
+                     if j < len(tokens) and tokens[j].type == 'RPAREN':
+                         i = j # Advance to RPAREN
+                         values.append(Call(name, []))
+                     else:
+                         while j < len(tokens):
+                             if tokens[j].type == 'LPAREN': depth += 1
+                             elif tokens[j].type == 'RPAREN': depth -= 1
+                             
+                             if depth == 0:
+                                 if current_elem: elements_tokens.append(current_elem)
+                                 break
+                             
+                             if tokens[j].type == 'COMMA' and depth == 1:
+                                 elements_tokens.append(current_elem)
+                                 current_elem = []
+                             else:
+                                 current_elem.append(tokens[j])
+                             j += 1
+                         
+                         args = [self.parse_expr_iterative(elem) for elem in elements_tokens if elem]
+                         values.append(Call(name, args))
+                         i = j # Advance to RPAREN
                 else:
                     values.append(VarAccess(t.value))
             elif t.type == 'LPAREN':

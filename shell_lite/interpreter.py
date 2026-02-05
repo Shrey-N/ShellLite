@@ -490,9 +490,9 @@ class Interpreter:
                 code_parts.append(colors[node.color.lower()])
             if code_parts:
                 ansi_code = "\033[" + ";".join(code_parts) + "m"
-                print(f"{ansi_code}{value}\033[0m")
+                print(f"{ansi_code}{value}\033[0m", flush=True)
                 return value
-        print(value)
+        print(value, flush=True)
         return value
     def visit_If(self, node: If):
         condition = self.visit(node.condition)
@@ -615,7 +615,6 @@ class Interpreter:
                      finally:
                          self.web.pop()
                  return result
-             return result
         try:
             func = self.current_env.get(node.name)
             if callable(func):

@@ -34,11 +34,11 @@ try:
     import pyperclip
     from plyer import notification
 except ImportError:
-    pass 
+    pass
 class Environment:
     def __init__(self, parent=None):
         self.variables: Dict[str, Any] = {}
-        self.constants: set = set()  
+        self.constants: set = set()
         self.parent = parent
     def get(self, name: str) -> Any:
         if name in self.variables:
@@ -146,9 +146,9 @@ class Interpreter:
         self.current_env = self.global_env
         self.functions: Dict[str, FunctionDef] = {}
         self.classes: Dict[str, ClassDef] = {}
-        self.http_routes = [] 
-        self.middleware_routes = [] 
-        self.static_routes = {} 
+        self.http_routes = []
+        self.middleware_routes = []
+        self.static_routes = {}
         self.web = WebBuilder(self)
         self.db_conn = None
         self.builtins = {
@@ -178,7 +178,7 @@ class Interpreter:
             'char': chr, 'ord': ord,
             'append': self._builtin_smart_add,
             'push': self._builtin_smart_add,
-            'count': len,  
+            'count': len,
             'remove': lambda l, x: l.remove(x),
             'pop': lambda l, idx=-1: l.pop(idx),
             'get': lambda l, idx: l[idx],
@@ -212,14 +212,14 @@ class Interpreter:
             'wait': time.sleep,
             'push': self._builtin_push,
             'remove': lambda lst, item: lst.remove(item),
-            'Set': set, 
+            'Set': set,
             'show': print,
             'say': print,
             'today': lambda: datetime.now().strftime("%Y-%m-%d"),
         }
         tags = [
-            'div', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 
-            'span', 'a', 'img', 'button', 'input', 'form', 
+            'div', 'p', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6',
+            'span', 'a', 'img', 'button', 'input', 'form',
             'ul', 'li', 'ol', 'table', 'tr', 'td', 'th',
             'html', 'head', 'body', 'title', 'meta', 'link',
             'script', 'style', 'br', 'hr',
@@ -242,7 +242,6 @@ class Interpreter:
     def _make_tag_fn(self, tag_name):
         def tag_fn(*args, **kwargs):
             attrs = {}
-            # Add kwargs directly as attributes
             attrs.update(kwargs)
             content = []
             for arg in args:
@@ -571,7 +570,7 @@ class Interpreter:
         if len(args) > len(func_def.args):
              raise TypeError(f"Function '{func_def.name}' expects max {len(func_def.args)} arguments, got {len(args)}")
         old_env = self.current_env
-        new_env = Environment(parent=self.global_env) 
+        new_env = Environment(parent=self.global_env)
         for i, (arg_name, default_node, type_hint) in enumerate(func_def.args):
             if i < len(args):
                 val = self.visit(args[i])
@@ -767,7 +766,7 @@ class Interpreter:
         if node.path in self.std_modules:
             self.current_env.set(node.path, self.std_modules[node.path])
             return
-        import os 
+        import os
         import importlib
         target_path = None
         if os.path.exists(node.path):
@@ -811,7 +810,7 @@ class Interpreter:
             self.current_env.set(node.path, py_module)
             return
         except ImportError:
-            pass # Fall through to error
+            pass
         raise FileNotFoundError(f"Could not find module '{node.path}'. Searched:\n - ShellLite Local/Global\n - Python Site-Packages (The Bridge)")
     def _get_class_properties(self, class_def: ClassDef) -> List[tuple[str, Optional[Node]]]:
         if not hasattr(class_def, 'properties'): return []
@@ -964,9 +963,9 @@ class Interpreter:
                         last_mtime = current_mtime
                         for stmt in node.body:
                             self.visit(stmt)
-                time.sleep(1) 
+                time.sleep(1)
         except StopException:
-            pass 
+            pass
         except ReturnException:
             raise
     def _check_type(self, arg_name, val, type_hint):
@@ -1217,7 +1216,7 @@ class Interpreter:
             parent, layout_mode = parent_ctx
         else:
             parent = parent_ctx
-            layout_mode = 'column' # Default to column
+            layout_mode = 'column'
         widget = None
         if node.widget_type == 'button':
             def on_click():
@@ -1278,12 +1277,12 @@ class Interpreter:
              if isinstance(val, str):
                  try:
                      return json.loads(val)
-                 except: 
-                     return json.dumps(val) 
+                 except:
+                     return json.dumps(val)
              else:
                  if isinstance(val, Instance):
                      return json.dumps(val.data)
-                 return json.dumps(val) 
+                 return json.dumps(val)
         raise ValueError(f"Unknown conversion format: {node.target_format}")
     def visit_ProgressLoop(self, node: ProgressLoop):
         loop = node.loop_node
@@ -1298,7 +1297,7 @@ class Interpreter:
                  try:
                      for stmt in loop.body:
                          self.visit(stmt)
-                 except: pass 
+                 except: pass
              print(f"Progress: [{'='*20}] 100%           ")
         elif isinstance(loop, For):
              count = self.visit(loop.count)
@@ -1396,9 +1395,7 @@ class Interpreter:
         class ReusableHTTPServer(ThreadingHTTPServer):
             allow_reuse_address = True
             daemon_threads = True
-
             def handle_error(self, request, client_address):
-                # Suppress output for connection resets (common with browser disconnects)
                 try:
                     _, exc, _ = sys.exc_info()
                     if isinstance(exc, (ConnectionResetError, BrokenPipeError)):
@@ -1407,8 +1404,8 @@ class Interpreter:
                     pass
                 super().handle_error(request, client_address)
         class ShellLiteHandler(BaseHTTPRequestHandler):
-            def log_message(self, format, *args): pass 
-            def do_GET(self): 
+            def log_message(self, format, *args): pass
+            def do_GET(self):
                 self.handle_req()
             def do_POST(self):
                 content_length = int(self.headers.get('Content-Length', 0))
@@ -1434,14 +1431,14 @@ class Interpreter:
                     path = self.path
                     if '?' in path: path = path.split('?')[0]
                     req_obj = {
-                        "method": self.command, 
+                        "method": self.command,
                         "path": path,
                         "params": post_params,
-                        "form": post_params, 
+                        "form": post_params,
                         "json": json_data
                     }
                     interpreter_ref.global_env.set("request", req_obj)
-                    interpreter_ref.global_env.set("REQUEST_METHOD", self.command) 
+                    interpreter_ref.global_env.set("REQUEST_METHOD", self.command)
                     for prefix, folder in interpreter_ref.static_routes.items():
                         if path.startswith(prefix):
                             clean_path = path[len(prefix):]
@@ -1516,7 +1513,7 @@ class Interpreter:
         print(f"\n  ShellLite Server v0.5.3.4 is running!")
         print(f"  \u001b[1;36m➜\u001b[0m  Local:   \u001b[1;4;36mhttp://localhost:{port_val}/\u001b[0m\n")
         try: server.serve_forever()
-        except KeyboardInterrupt: 
+        except KeyboardInterrupt:
             print("\n  Server stopped.")
             pass
     def visit_DatabaseOp(self, node: DatabaseOp):
@@ -1576,7 +1573,7 @@ class Interpreter:
                      print(f"Error: Source '{source}' does not exist.")
                      return
                  print("Compression complete.")
-            else: 
+            else:
                  print(f"Extracting '{source}' to '{target}'...")
                  if not os.path.exists(source):
                       print(f"Error: Archive '{source}' does not exist.")
@@ -1594,11 +1591,11 @@ class Interpreter:
             with open(path, 'r', newline='') as f:
                 reader = csv.DictReader(f)
                 return [row for row in reader]
-        else: 
+        else:
             data = self.visit(node.data)
             if not isinstance(data, list):
-                 data = [data] 
-            if not data: return 
+                 data = [data]
+            if not data: return
             rows = []
             for item in data:
                  if isinstance(item, Instance):
@@ -1664,7 +1661,7 @@ class Interpreter:
                  if days_ahead <= 0: days_ahead += 7
                  d = today + timedelta(days=days_ahead)
                  return d.strftime("%Y-%m-%d")
-        return s 
+        return s
     def visit_FileWrite(self, node: FileWrite):
         path = str(self.visit(node.path))
         content = str(self.visit(node.content))

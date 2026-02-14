@@ -253,7 +253,7 @@ def slang_db_query(sql, params=None):
     c = _slang_db_conn.cursor(); c.execute(sql, params)
     return c.fetchall()
 def slang_json_stringify(val):
-    if isinstance(val, (Instance, dict)): 
+    if isinstance(val, (Instance, dict)):
         d = val.data if isinstance(val, Instance) else val
         return json.dumps(d)
     if isinstance(val, list):
@@ -381,7 +381,7 @@ def get_builtins():
         'char': chr, 'ord': ord,
         'append': lambda l, x: (l.append(x), l)[1],
         'push': slang_push,
-        'count': len, 
+        'count': len,
         'remove': lambda l, x: l.remove(x),
         'pop': lambda l, idx=-1: l.pop(idx),
         'get': lambda l, idx: l[idx],

@@ -4,7 +4,6 @@ from shell_lite.lexer import Lexer
 from shell_lite.parser_gbp import GeometricBindingParser
 from shell_lite.interpreter import Interpreter
 from shell_lite.ast_nodes import FunctionDef, Call
-
 source = """to first
 begin
 say "1"
@@ -18,12 +17,10 @@ end
 first
 other
 """
-
 lex = Lexer(source)
 tokens = lex.tokenize()
 parser = GeometricBindingParser(tokens)
 ast = parser.parse()
-
 print("=== AST ===")
 for i, node in enumerate(ast):
     print(f"Node {i}: {type(node).__name__}")
@@ -35,20 +32,14 @@ for i, node in enumerate(ast):
             print(f"    stmt[{j}]: {type(stmt).__name__} = {stmt}")
     else:
         print(f"  {node}")
-
-# Manually call the functions
 print("\n=== Manual Function Calls ===")
 interp = Interpreter()
-# First register the function definitions
 for node in ast:
     if isinstance(node, FunctionDef):
         interp.visit(node)
-
 print(f"Registered functions: {list(interp.functions.keys())}")
 print(f"'first' function body: {interp.functions['first'].body}")
 print(f"'other' function body: {interp.functions['other'].body}")
-
-# Now call first explicitly
 print("\nCalling first:")
 interp.visit_Call(Call('first', []))
 print("\nCalling other:")

@@ -8,13 +8,13 @@ from shell_lite.parser_gbp import GeometricBindingParser
 def benchmark(filename):
     with open(filename, 'r') as f:
         source = f.read()
-    long_source = source * 500 
+    long_source = source * 500
     print(f"Benchmarking on {len(long_source)} chars of code...")
     lexer = Lexer(long_source)
     tokens = lexer.tokenize()
     tokens_copy = list(tokens)
     start = time.perf_counter()
-    p_old = Parser(list(tokens)) # fresh copy? Parser consumes? yes
+    p_old = Parser(list(tokens))
     ast_old = p_old.parse()
     end = time.perf_counter()
     t_old = end - start

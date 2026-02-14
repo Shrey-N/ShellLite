@@ -3,7 +3,7 @@ from ..ast_nodes import *
 class LLVMCompiler:
     def __init__(self):
         self.module = ir.Module(name="shell_lite_module")
-        self.module.triple = "x86_64-pc-windows-msvc" # Assume Windows for now based on user OS
+        self.module.triple = "x86_64-pc-windows-msvc"
         self.int32 = ir.IntType(32)
         self.char_ptr = ir.IntType(8).as_pointer()
         voidptr_ty = ir.IntType(8).as_pointer()
@@ -43,7 +43,7 @@ class LLVMCompiler:
         self.main_func = ir.Function(self.module, func_type, name="main")
         block = self.main_func.append_basic_block(name="entry")
         self.builder = ir.IRBuilder(block)
-        self.scopes = [{}] 
+        self.scopes = [{}]
         self.loop_stack = []
         self.str_constants = {}
     def _get_scope(self):
@@ -146,7 +146,7 @@ class LLVMCompiler:
         self.builder.position_at_end(body_bb)
         for stmt in node.body:
             self.visit(stmt)
-        self.builder.branch(cond_bb) # Loop back
+        self.builder.branch(cond_bb)
         self.builder.position_at_end(after_bb)
         self.loop_stack.pop()
     def visit_Repeat(self, node: Repeat):
@@ -174,20 +174,20 @@ class LLVMCompiler:
         self.builder.position_at_end(after_bb)
         self.loop_stack.pop()
     def visit_FunctionDef(self, node: FunctionDef):
-        arg_types = [self.int32] * len(node.args) 
+        arg_types = [self.int32] * len(node.args)
         arg_types = []
         for arg in node.args:
-            name, _, hint = arg # arg is tuple
-            if True: # FORCE ALL ARGS TO STRINGS FOR SHELL LITE (Phase 7 Fix)
+            name, _, hint = arg
+            if True:
                  arg_types.append(self.char_ptr)
             else:
                  arg_types.append(self.int32)
-        func_ty = ir.FunctionType(self.int32, arg_types) # Return int32 (or pointer casted)
+        func_ty = ir.FunctionType(self.int32, arg_types)
         func = ir.Function(self.module, func_ty, name=node.name)
         old_builder = self.builder
         block = func.append_basic_block(name="entry")
         self.builder = ir.IRBuilder(block)
-        self.scopes.append({}) # New scope
+        self.scopes.append({})
         for i, arg in enumerate(func.args):
             arg_name = node.args[i][0]
             arg.name = arg_name
@@ -267,7 +267,7 @@ class LLVMCompiler:
         return ir.Constant(self.int32, 0)
     def visit_FileRead(self, node: FileRead):
         path = self.visit(node.path)
-        mode = self._get_string_constant("rb") # Binary to avoid text translation issues? Or "r"
+        mode = self._get_string_constant("rb")
         fp = self.builder.call(self.fopen, [path, mode], name="fp")
         self.builder.call(self.fseek, [fp, ir.Constant(self.int32, 0), ir.Constant(self.int32, 2)])
         size = self.builder.call(self.ftell, [fp], name="fsize")

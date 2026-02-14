@@ -1,23 +1,17 @@
 import os
-
 file_path = r"c:\Users\shrey\OneDrive\Desktop\oka\shell-lite\shell_lite\interpreter.py"
-
 with open(file_path, "r", encoding="utf-8") as f:
     lines = f.readlines()
-
 start_index = -1
 end_index = -1
-
 for i, line in enumerate(lines):
     if line.strip().startswith("def visit_Import(self, node: Import):"):
         start_index = i
     if line.strip().startswith("def _get_class_properties(self, class_def: ClassDef)"):
         end_index = i
         break
-
 if start_index != -1 and end_index != -1:
     print(f"Found visit_Import at {start_index} and _get_class_properties at {end_index}")
-    
     new_method = """    def visit_Import(self, node: Import):
         if node.path in self.std_modules:
             self.current_env.set(node.path, self.std_modules[node.path])
@@ -79,12 +73,9 @@ if start_index != -1 and end_index != -1:
             
         raise FileNotFoundError(f"Could not find module '{node.path}'. Searched:\\n - ShellLite Local/Global\\n - Python Site-Packages (The Bridge)")
 """
-    
     lines[start_index:end_index] = [new_method + "\n"]
-    
     with open(file_path, "w", encoding="utf-8") as f:
         f.writelines(lines)
     print("PATCH APPLIED SUCCESSFULLY")
-
 else:
     print("FAILED TO FIND METHOD BOUNDARIES")

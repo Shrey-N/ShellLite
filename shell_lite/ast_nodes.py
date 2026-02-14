@@ -17,7 +17,7 @@ class VarAccess(Node):
     name: str
 @dataclass
 class Assign(Node):
-    name: str 
+    name: str
     value: Node
 @dataclass
 class PropertyAssign(Node):
@@ -69,7 +69,7 @@ class Input(Node):
 @dataclass
 class FunctionDef(Node):
     name: str
-    args: List[tuple[str, Optional[Node], Optional[str]]] 
+    args: List[tuple[str, Optional[Node], Optional[str]]]
     body: List[Node]
     return_type: Optional[str] = None
 @dataclass
@@ -77,7 +77,7 @@ class Call(Node):
     name: str
     args: List[Node]
     kwargs: Optional[List[tuple[str, Node]]] = None
-    body: Optional[List[Node]] = None 
+    body: Optional[List[Node]] = None
 @dataclass
 class Return(Node):
     value: Node
@@ -114,7 +114,7 @@ class Try(Node):
 @dataclass
 class Lambda(Node):
     params: List[str]
-    body: Node  
+    body: Node
 @dataclass
 class Ternary(Node):
     condition: Node
@@ -151,7 +151,7 @@ class Skip(Node):
 @dataclass
 class When(Node):
     value: Node
-    cases: List[tuple[Node, List[Node]]]  
+    cases: List[tuple[Node, List[Node]]]
     otherwise: Optional[List[Node]] = None
 @dataclass
 class Throw(Node):
@@ -188,7 +188,7 @@ class Forever(Node):
 @dataclass
 class Exit(Node):
     code: Optional[Node] = None
-@dataclass  
+@dataclass
 class Make(Node):
     class_name: str
     args: List[Node]
@@ -213,7 +213,7 @@ class Await(Node):
     task: Node
 @dataclass
 class ProgressLoop(Node):
-    loop_node: Node 
+    loop_node: Node
 @dataclass
 class Convert(Node):
     expression: Node
@@ -223,12 +223,12 @@ class Listen(Node):
     port: Node
 @dataclass
 class OnRequest(Node):
-    path: Node 
+    path: Node
     body: List[Node]
 @dataclass
 class Every(Node):
     interval: Node
-    unit: str 
+    unit: str
     body: List[Node]
 @dataclass
 class After(Node):
@@ -244,30 +244,30 @@ class Download(Node):
     url: Node
 @dataclass
 class ArchiveOp(Node):
-    op: str 
+    op: str
     source: Node
     target: Node
 @dataclass
 class CsvOp(Node):
-    op: str 
+    op: str
     data: Optional[Node]
     path: Node
 @dataclass
 class ClipboardOp(Node):
-    op: str 
-    content: Optional[Node] 
+    op: str
+    content: Optional[Node]
 @dataclass
 class AutomationOp(Node):
-    action: str 
+    action: str
     args: List[Node]
 @dataclass
 class DateOp(Node):
-    expr: str 
+    expr: str
 @dataclass
 class FileWrite(Node):
-    path: Node 
-    content: Node 
-    mode: str 
+    path: Node
+    content: Node
+    mode: str
 @dataclass
 class FileRead(Node):
     path: Node
@@ -291,11 +291,11 @@ class App(Node):
     body: List[Node]
 @dataclass
 class Widget(Node):
-    widget_type: str  # 'button', 'input', 'heading', 'text'
+    widget_type: str
     label: str
     var_name: Optional[str] = None
-    event_handler: Optional[List[Node]] = None # For buttons with 'do:'
+    event_handler: Optional[List[Node]] = None
 @dataclass
 class Layout(Node):
-    layout_type: str # 'column', 'row'
+    layout_type: str
     body: List[Node]

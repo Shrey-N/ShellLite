@@ -11,14 +11,14 @@ except ImportError:
     sys.path.append(os.path.join(os.path.dirname(__file__)))
     from run_jit import compile_and_run_jit
 def run_benchmark():
-    counts = [1000000, 10000000, 50000000, 100000000, 200000000] 
+    counts = [1000000, 10000000, 50000000, 100000000, 200000000]
     t_interp = []
     t_python = []
     t_llvm = []
     print("Running Massive Runtime Benchmark...")
     for n in counts:
         print(f"\n--- n = {n} ---")
-        if n <= 100000: # Reduced limit for massive scale run
+        if n <= 100000:
             shl_code = f"i = 0\nwhile i < {n}:\n    i = i + 1\n"
             shl_file = f"tests/temp_{n}.shl"
             with open(shl_file, "w") as f: f.write(shl_code)
@@ -41,7 +41,7 @@ def run_benchmark():
             else:
                  print("Interpreter: Failed")
         else:
-            t_interp.append(None) 
+            t_interp.append(None)
             print("Interpreter: Skipped (Too Slow)")
         start = time.perf_counter()
         i = 0
@@ -58,7 +58,7 @@ def run_benchmark():
         """
         try:
              _, dur, _ = compile_and_run_jit(jit_code)
-             if dur < 1e-7: dur = 1e-7 
+             if dur < 1e-7: dur = 1e-7
              t_llvm.append(dur)
              print(f"LLVM JIT: {dur:.8f}s")
         except Exception as e:

@@ -11,12 +11,11 @@ class GeoNode:
     tokens: List[Token] = field(default_factory=list)
     children: List['GeoNode'] = field(default_factory=list)
     parent: Optional['GeoNode'] = None
-    
     def __repr__(self):
         return f"GeoNode(line={self.line}, indent={self.indent_level}, head={self.head_token.type})"
 class GeometricBindingParser:
     def __init__(self, tokens: List[Token]):
-        self.tokens = [t for t in tokens if t.type != 'COMMENT']  # Should keep NEWLINE/INDENT/DEDENT for context? 
+        self.tokens = [t for t in tokens if t.type != 'COMMENT']
         self.root_nodes: List[GeoNode] = []
         self.precedence = {
             'OR': 1, 'AND': 2, 'NOT': 3,
@@ -40,16 +39,15 @@ class GeometricBindingParser:
         Phase 1: Scans tokens to build GeoNodes.
         Phase 2: Links them into a tree based on nesting.
         """
-        node_stack: List[GeoNode] = [] # The active parents
+        node_stack: List[GeoNode] = []
         current_tokens_accumulator = []
         current_node: Optional[GeoNode] = None
-        last_line_node: Optional[GeoNode] = None  # Track the last completed line's node
-        block_stack: List[GeoNode] = [] 
+        last_line_node: Optional[GeoNode] = None
+        block_stack: List[GeoNode] = []
         for token in self.tokens:
             if token.type == 'EOF':
                 break
             if token.type == 'INDENT':
-                # Use last_line_node as parent if current_node is None (NEWLINE came before INDENT)
                 parent_to_push = current_node if current_node else last_line_node
                 if parent_to_push:
                      block_stack.append(parent_to_push)
@@ -60,15 +58,15 @@ class GeometricBindingParser:
                      block_stack.pop()
                  continue
             if token.type == 'NEWLINE':
-                last_line_node = current_node  # Save before resetting
+                last_line_node = current_node
                 current_node = None
                 continue
             if current_node is None:
                 current_node = GeoNode(
                     head_token=token,
                     line=token.line,
-                    indent_level=len(block_stack), # Logical depth
-                    tokens=[token] # Start collecting tokens
+                    indent_level=len(block_stack),
+                    tokens=[token]
                 )
                 if block_stack:
                     parent = block_stack[-1]
@@ -112,8 +110,6 @@ class GeometricBindingParser:
         elif head_type == 'LISTEN':
             return self.bind_listen(node)
         elif head_type == 'ID':
-            # Assignment: ID ASSIGN ... (second token must be ASSIGN)
-            # Function call with kwargs: ID ID ASSIGN ... (ASSIGN comes later)
             if len(node.tokens) >= 2 and node.tokens[1].type == 'ASSIGN':
                 return self.bind_assignment(node)
             return self.bind_call_or_expr(node)
@@ -141,97 +137,43 @@ class GeometricBindingParser:
         count = self.parse_expr_iterative(expr_tokens)
         body = [self.bind_node(child) for child in node.children]
         return Repeat(count, body)
-    
     def bind_forever(self, node: GeoNode) -> Forever:
         body = [self.bind_node(child) for child in node.children]
         return Forever(body)
-
     def bind_for(self, node: GeoNode) -> Node:
-        # 'for i in range 1 10' or 'for item in list'
-        # node.tokens starts with FOR/LOOP
-        # Next should be ID (var name)
-        if len(node.tokens) < 3: 
-             return None # Error?
-             
+        if len(node.tokens) < 3:
+             return None
         var_name = node.tokens[1].value
-        
-        # Check for 'IN'
         in_index = -1
         for i, t in enumerate(node.tokens):
             if t.type == 'IN':
                 in_index = i
                 break
-        
         if in_index == -1:
-             # Maybe 'loop 10 times'? No, that's Repeat (handled by bind_repeat if HEAD is REPEAT)
-             # But if HEAD is LOOP?
              if node.head_token.type == 'LOOP':
-                 # loop 200 times
-                 # Delegated to bind_repeat logic if we can re-route, OR implement here
-                 # Look for TIMES
                  if node.tokens[-1].type == 'TIMES':
                      expr_tokens = self._extract_expr_tokens(node.tokens, start=1)
-                     expr_tokens.pop() # remove TIMES
+                     expr_tokens.pop()
                      count = self.parse_expr_iterative(expr_tokens)
                      body = [self.bind_node(child) for child in node.children]
                      return Repeat(count, body)
              return None
-
-        # It is a FOR loop
-        # Check for RANGE
         range_index = -1
         for i, t in enumerate(node.tokens):
             if t.type == 'RANGE':
                 range_index = i
                 break
-                
         if range_index != -1:
-             # for i in range 1 10
-             # Extract args after RANGE
              args_tokens = node.tokens[range_index+1:]
-             # We need to split by space/comma? parse_expr_iterative might consume all?
-             # Range takes start, end, step.
-             # We can cheat and wrap them in a Call to 'range'?
-             # Or parse sub-expressions.
-             # Simplification: Assume numbers/vars separated by nothing (since lexer doesn't produce commas for spaces)
-             # But parse_expr_iterative consumes everything.
-             # We need to split manually if they are distinct expressions.
-             # Let's try to parse one expr, see where it ends? Not easy with shunting yard.
-             
-             # Fallback: Create a Call('range', ...)
-             # Actually, interpreter expects 'count' for For loop? 
-             # No, AST For node: For(count, body) -> interpreted as Repeat?
-             # Wait, AST For(count, body) vs ForIn(var_name, iterable, body)
-             
-             # Let's see AST definition.
-             pass 
-
-        # It is likely a ForIn
-        # iterable is everything after IN
+             pass
         iterable_tokens = self._extract_expr_tokens(node.tokens, start=in_index+1)
         iterable = self.parse_expr_iterative(iterable_tokens)
         body = [self.bind_node(child) for child in node.children]
-        
-        # Handle 'range 1 10' as an iterable (Call to range)
         if node.tokens[in_index+1].type == 'RANGE':
-             # tokens: FOR i IN RANGE 1 10
-             # We want Call('range', [1, 10])
-             # Extract numbers after RANGE
              args_tokens = self._extract_expr_tokens(node.tokens, start=in_index+2)
-             # Assumption: args are space separated expressions. 
-             # parse_expr_iterative consumes all. 
-             # We need to manually split if there are multiple args?
-             # But 'range 1 10' in ShellLite usually means two numbers.
-             # If we just Pass all tokens to parse_expr_iterative, it might just return the first one if not connected by operator.
-             # For 'range 1 10', we have NUMBER 1, NUMBER 10.
-             # We need to build a list of args.
              range_args = []
              k = 0
              while k < len(args_tokens):
-                 # Try to parse one expression? 
-                 # This is hard with current parser structure.
-                 # SIMPLE HACK: Just take the next two tokens as numbers?
-                 # Or treat them as separate expression?
                  if args_tokens[k].type in ('NUMBER', 'STRING', 'ID'):
                      t = args_tokens[k]
                      val = None
@@ -243,9 +185,7 @@ class GeometricBindingParser:
                          val = VarAccess(t.value)
                      if val: range_args.append(val)
                  k += 1
-             
              iterable = Call('range', range_args)
-             
         return ForIn(var_name, iterable, body)
     def bind_print(self, node: GeoNode) -> Print:
         expr_tokens = self._extract_expr_tokens(node.tokens, start=1)
@@ -261,18 +201,15 @@ class GeometricBindingParser:
             if t.type == 'ASSIGN':
                 assign_idx = i
                 break
-        name = node.tokens[0].value # Simplification: Assume simple ID assignment
+        name = node.tokens[0].value
         expr_tokens = node.tokens[assign_idx+1:]
         value = self.parse_expr_iterative(expr_tokens)
         return Assign(name, value)
     def bind_expression_stmt(self, node: GeoNode) -> Any:
         return self.parse_expr_iterative(node.tokens)
     def bind_start(self, node: GeoNode) -> Listen:
-        # 'start website' -> Listen(8080)
-        # We could parse args if needed, but for now we assume default
         return Listen(Number(8080))
     def bind_listen(self, node: GeoNode) -> Listen:
-        # 'listen 8080' or 'listen port 8080'
         expr_tokens = self._extract_expr_tokens(node.tokens, start=1)
         if expr_tokens and expr_tokens[0].type == 'PORT':
              expr_tokens.pop(0)
@@ -283,7 +220,6 @@ class GeometricBindingParser:
         if node.tokens[0].type == 'DEFINE': start = 2
         name = node.tokens[start].value
         args = []
-        # Look for 'using' keyword (which is tokenized as ID)
         collecting_args = False
         for t in node.tokens[start+1:]:
             if t.type == 'USING':
@@ -296,13 +232,11 @@ class GeometricBindingParser:
         body = [self.bind_node(child) for child in node.children]
         return FunctionDef(name, args, body)
     def bind_use(self, node: GeoNode) -> Import:
-        # 'use "filename.shl"'
         for t in node.tokens:
             if t.type == 'STRING':
                 return Import(t.value)
         return Import(node.tokens[1].value if len(node.tokens) > 1 else '')
     def bind_serve(self, node: GeoNode) -> ServeStatic:
-        # 'serve files from "public" at "/static"'
         folder = String('public')
         url = String('/static')
         tokens = node.tokens
@@ -313,18 +247,15 @@ class GeometricBindingParser:
                 url = self.parse_expr_iterative([tokens[i+1]])
         return ServeStatic(folder, url)
     def bind_define(self, node: GeoNode) -> FunctionDef:
-        # 'define page Name using arg1, arg2'
         tokens = node.tokens
         name = ''
         args = []
         i = 1
-        # Skip 'page' or 'component' if present
         if i < len(tokens) and tokens[i].type == 'PAGE':
             i += 1
         if i < len(tokens) and tokens[i].type == 'ID':
             name = tokens[i].value
             i += 1
-        # Parse 'using' args
         if i < len(tokens) and tokens[i].type == 'USING':
             i += 1
             while i < len(tokens):
@@ -338,7 +269,6 @@ class GeometricBindingParser:
         body = [self.bind_node(child) for child in node.children]
         return FunctionDef(name, args, body)
     def bind_when(self, node: GeoNode) -> OnRequest:
-        # 'when someone visits "/path"'
         tokens = node.tokens
         path = String('/')
         for i, t in enumerate(tokens):
@@ -348,7 +278,6 @@ class GeometricBindingParser:
         body = [self.bind_node(child) for child in node.children]
         return OnRequest(path, body)
     def bind_on(self, node: GeoNode) -> OnRequest:
-        # 'on request to "/path"'
         tokens = node.tokens
         path = String('/')
         for t in tokens:
@@ -358,18 +287,14 @@ class GeometricBindingParser:
         body = [self.bind_node(child) for child in node.children]
         return OnRequest(path, body)
     def bind_call_or_expr(self, node: GeoNode) -> Any:
-        # Handle function calls like 'Head "title"' or 'Navbar'
         tokens = node.tokens
         if len(tokens) >= 1 and tokens[0].type == 'ID':
             name = tokens[0].value
             args = []
             kwargs = []
-            # Parse remaining tokens as arguments, handling key=value for HTML attributes
             i = 1
             while i < len(tokens):
                 t = tokens[i]
-                # Check for key=value pattern (e.g. class="container", style="...", href="...")
-                # HTML attributes may be tokenized as various types: ID, STRUCTURE, HREF, REL, NAME, etc.
                 is_attr_key = t.type in ('ID', 'STRUCTURE', 'HREF', 'REL', 'NAME', 'STYLE', 'CONTENT', 'CHARSET', 'SRC', 'ALT', 'TYPE', 'VALUE', 'PLACEHOLDER', 'METHOD', 'ACTION')
                 is_kwarg = (is_attr_key and i + 2 < len(tokens) and tokens[i + 1].type == 'ASSIGN')
                 if is_kwarg:
@@ -390,7 +315,6 @@ class GeometricBindingParser:
                 elif t.type == 'ID':
                     args.append(VarAccess(t.value))
                 i += 1
-            # Check for children (indented body)
             body = None
             if node.children:
                 body = [self.bind_node(child) for child in node.children]
@@ -434,7 +358,6 @@ class GeometricBindingParser:
             elif t.type == 'STRING':
                 values.append(String(t.value))
             elif t.type == 'LBRACKET':
-                # Consumed nested list
                 depth = 1
                 j = i + 1
                 elements_tokens = []
@@ -442,57 +365,45 @@ class GeometricBindingParser:
                 while j < len(tokens):
                     if tokens[j].type == 'LBRACKET': depth += 1
                     elif tokens[j].type == 'RBRACKET': depth -= 1
-                    
                     if depth == 0:
                         if current_elem: elements_tokens.append(current_elem)
                         break
-                    
                     if tokens[j].type == 'COMMA' and depth == 1:
                         elements_tokens.append(current_elem)
                         current_elem = []
                     else:
                         current_elem.append(tokens[j])
                     j += 1
-                
-                # Parse elements
                 items = [self.parse_expr_iterative(elem) for elem in elements_tokens if elem]
                 values.append(ListVal(items))
-                i = j # Advance past list
+                i = j
             elif t.type == 'ID':
                 if i+1 < len(tokens) and tokens[i+1].type == 'LPAREN':
-                     # Function call: ID(args)
                      name = t.value
-                     
-                     # Find matching RPAREN
                      depth = 1
-                     j = i + 2 # Skip ID and LPAREN
+                     j = i + 2
                      elements_tokens = []
                      current_elem = []
-                     
                      arg_tokens_start = j
-                     # Check for empty call "func()"
                      if j < len(tokens) and tokens[j].type == 'RPAREN':
-                         i = j # Advance to RPAREN
+                         i = j
                          values.append(Call(name, []))
                      else:
                          while j < len(tokens):
                              if tokens[j].type == 'LPAREN': depth += 1
                              elif tokens[j].type == 'RPAREN': depth -= 1
-                             
                              if depth == 0:
                                  if current_elem: elements_tokens.append(current_elem)
                                  break
-                             
                              if tokens[j].type == 'COMMA' and depth == 1:
                                  elements_tokens.append(current_elem)
                                  current_elem = []
                              else:
                                  current_elem.append(tokens[j])
                              j += 1
-                         
                          args = [self.parse_expr_iterative(elem) for elem in elements_tokens if elem]
                          values.append(Call(name, args))
-                         i = j # Advance to RPAREN
+                         i = j
                 else:
                     values.append(VarAccess(t.value))
             elif t.type == 'LPAREN':
@@ -500,9 +411,9 @@ class GeometricBindingParser:
             elif t.type == 'RPAREN':
                 while ops and ops[-1] != 'LPAREN':
                     apply_op()
-                if ops: ops.pop() # Pop LPAREN
+                if ops: ops.pop()
             elif t.type in self.precedence:
-                while (ops and ops[-1] != 'LPAREN' and 
+                while (ops and ops[-1] != 'LPAREN' and
                        precedence(ops[-1]) >= precedence(t.type)):
                     apply_op()
                 ops.append(t.type)

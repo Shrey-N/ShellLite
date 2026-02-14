@@ -101,7 +101,7 @@ class Parser:
         elif self.check('SPAWN'):
              expr = self.parse_expression()
              self.consume('NEWLINE')
-             return Print(expr) 
+             return Print(expr)
              pass
         elif self.check('WAIT'):
             return self.parse_wait()
@@ -121,8 +121,8 @@ class Parser:
              if self.check('LOAD') and self.peek(1).type == 'CSV':
                  return self.parse_csv_load()
              if self.check('SAVE'):
-                 return self.parse_csv_save() 
-             return self.parse_expression_stmt() 
+                 return self.parse_csv_save()
+             return self.parse_expression_stmt()
         elif self.check('COPY') or self.check('PASTE'):
              return self.parse_clipboard()
         elif self.check('WRITE'):
@@ -201,7 +201,7 @@ class Parser:
         if self.check('REQUEST') or (self.check('ID') and self.peek().value == 'request'):
             self.consume()
             if self.check('TO'): self.consume('TO')
-            path = self.parse_expression() 
+            path = self.parse_expression()
             self.consume('NEWLINE')
             self.consume('INDENT')
             body = []
@@ -225,7 +225,7 @@ class Parser:
         self.consume('DEDENT')
         return FileWatcher(path, body)
     def _parse_natural_list(self) -> ListVal:
-        self.consume('ID') 
+        self.consume('ID')
         self.consume('LIST')
         self.consume('OF')
         elements = []
@@ -233,12 +233,12 @@ class Parser:
             elements.append(self.parse_expression())
             while self.check('COMMA'):
                 self.consume('COMMA')
-                if self.check('NEWLINE'): break 
+                if self.check('NEWLINE'): break
                 elements.append(self.parse_expression())
         node = ListVal(elements)
         return node
     def _parse_natural_set(self) -> Node:
-        self.consume('ID') 
+        self.consume('ID')
         self.consume('UNIQUE')
         self.consume('SET')
         self.consume('OF')
@@ -357,7 +357,7 @@ class Parser:
         if self.check('BE'):
             self.consume('BE')
             value = self.parse_expression()
-            node = Assign(class_name, value) # class_name is actually variable name here
+            node = Assign(class_name, value)
             node.line = token.line
             return node
         args = []
@@ -378,7 +378,7 @@ class Parser:
         return node
     def parse_db_op(self) -> DatabaseOp:
         token = self.consume('DB')
-        op = 'open' 
+        op = 'open'
         if self.check('OPEN'): op = 'open'; self.consume()
         elif self.check('QUERY'): op = 'query'; self.consume()
         elif self.check('EXEC'): op = 'exec'; self.consume()
@@ -513,7 +513,7 @@ class Parser:
             start_token = self.consume('DEFINE')
             self.consume('FUNCTION')
         else:
-            start_token = self.consume('TO') # Fallback to existing 'TO' if not 'DEFINE'
+            start_token = self.consume('TO')
         name = self.consume('ID').value
         args = []
         while self.check('ID'):
@@ -521,16 +521,16 @@ class Parser:
             type_hint = None
             if self.check('COLON'):
                 if self.peek(1).type == 'NEWLINE':
-                    pass 
+                    pass
                 else:
                     self.consume('COLON')
                     if self.check('ID'):
                         type_hint = self.consume('ID').value
-                    elif self.check('STRING'): 
+                    elif self.check('STRING'):
                         type_hint = "str"
                         self.consume()
-                    else: 
-                         type_hint = self.consume().value 
+                    else:
+                         type_hint = self.consume().value
             default_val = None
             if self.check('ASSIGN'):
                 self.consume('ASSIGN')
@@ -592,7 +592,7 @@ class Parser:
             elif self.check('NEWLINE'):
                 self.consume()
             else:
-                self.consume('DEDENT') 
+                self.consume('DEDENT')
                 break
         self.consume('DEDENT')
         node = ClassDef(name, properties, methods, parent)
@@ -655,11 +655,11 @@ class Parser:
                 node = Assign(name, Dictionary([]))
                 node.line = token_is.line
                 return node
-            if self.check('ID') and not self.peek().value in ('{', '['): 
+            if self.check('ID') and not self.peek().value in ('{', '['):
                 class_name = self.consume('ID').value
                 args = []
                 while not self.check('NEWLINE') and not self.check('EOF'):
-                    args.append(self.parse_expression()) 
+                    args.append(self.parse_expression())
                 self.consume('NEWLINE')
                 node = Instantiation(name, class_name, args)
                 node.line = token_is.line
@@ -722,7 +722,7 @@ class Parser:
         else:
             if not self.check('NEWLINE') and not self.check('EOF') and not self.check('EQ') and not self.check('IS'):
                 args = []
-                while not self.check('NEWLINE') and not self.check('EOF') and not self.check('IS'): 
+                while not self.check('NEWLINE') and not self.check('EOF') and not self.check('IS'):
                      is_named_arg = False
                      if self.peek(1).type == 'ASSIGN':
                          t_type = self.peek().type
@@ -848,7 +848,7 @@ class Parser:
         token = self.consume('EVERY')
         interval = self.parse_expression()
         unit = 'seconds'
-        if self.check('MINUTE'): 
+        if self.check('MINUTE'):
             self.consume()
             unit = 'minutes'
         elif self.check('SECOND'):
@@ -963,7 +963,7 @@ class Parser:
         else:
              token = self.consume('IMPORT')
         if self.check('ID') and self.peek().value == 'python':
-             self.consume('ID') # consume 'python'
+             self.consume('ID')
              if self.check('STRING'):
                  module_name = self.consume('STRING').value
                  alias = None
@@ -1182,7 +1182,7 @@ class Parser:
             self.consume('COMMA')
             skip_formatted()
             if self.check('RBRACKET'):
-                break  
+                break
             if self.check('DOTDOTDOT'):
                 self.consume('DOTDOTDOT')
                 spread_val = self.parse_expression()
@@ -1281,7 +1281,7 @@ class Parser:
     def parse_ui_block(self) -> Node:
         token = self.peek()
         if token.type in ('COLUMN', 'ROW'):
-            layout_type = self.consume().value # column or row
+            layout_type = self.consume().value
             self.consume('COLON')
             self.consume('NEWLINE')
             self.consume('INDENT')
@@ -1291,11 +1291,11 @@ class Parser:
                if self.check('NEWLINE'): self.consume('NEWLINE')
             self.consume('DEDENT')
             return Layout(layout_type, children)
-        elif (token.type in ('BUTTON', 'INPUT', 'HEADING') or 
+        elif (token.type in ('BUTTON', 'INPUT', 'HEADING') or
               (token.type == 'ID' and token.value == 'text')):
             if token.type == 'ID' and token.value == 'text':
                 widget_type = 'TEXT'
-                self.consume() # consume 'text' ID
+                self.consume()
             else:
                 widget_type = self.consume().value
             label = self.consume('STRING').value
@@ -1358,7 +1358,7 @@ class Parser:
         if token.type == 'ASK':
             self.consume('ASK')
             prompt = self.parse_expression()
-            node = Call('input', [prompt]) # Alias to input
+            node = Call('input', [prompt])
             node.line = token.line
             return node
         elif token.type == 'NUMBER':
@@ -1382,14 +1382,14 @@ class Parser:
                 current_node = None
                 for i, part in enumerate(parts):
                     if i % 2 == 0:
-                        if not part: continue 
+                        if not part: continue
                         expr = String(part)
                         expr.line = token.line
                     else:
                         snippet = part.strip()
                         if snippet:
                             sub_lexer = Lexer(snippet)
-                            sub_tokens = sub_lexer.tokenize() 
+                            sub_tokens = sub_lexer.tokenize()
                             sub_parser = Parser(sub_tokens)
                             try:
                                 expr = sub_parser.parse_expression()
@@ -1502,7 +1502,7 @@ class Parser:
         elif token.type == 'LOAD' and self.peek(1).type == 'CSV':
              self.consume('LOAD')
              self.consume('CSV')
-             path = self.parse_factor() 
+             path = self.parse_factor()
              node = CsvOp('load', None, path)
              node.line = token.line
              return node
@@ -1574,7 +1574,7 @@ class Parser:
                 return self.parse_sum()
             if token.value == 'count':
                 if self.peek(1).type == 'OF':
-                    self.consume() # count
+                    self.consume()
                     self.consume('OF')
                     expr = self.parse_expression()
                     node = Call('len', [expr])
@@ -1582,7 +1582,7 @@ class Parser:
                     return node
             if token.value == 'length':
                 if self.peek(1).type == 'OF':
-                    self.consume() # length
+                    self.consume()
                     self.consume('OF')
                     expr = self.parse_expression()
                     node = Call('len', [expr])
@@ -1648,7 +1648,7 @@ class Parser:
         elif token.type == 'INPUT' or token.type == 'ASK':
             next_t = self.peek(1)
             if next_t.type in ('ID', 'TYPE', 'STRING', 'NAME', 'VALUE', 'CLASS', 'STYLE', 'ONCLICK', 'SRC', 'HREF', 'ACTION', 'METHOD'):
-                self.consume() 
+                self.consume()
                 return self.parse_id_start_statement(passed_name_token=token)
             self.consume()
             prompt = None
@@ -1659,7 +1659,7 @@ class Parser:
             return node
         elif token.type == 'PROMPT':
             self.consume()
-            prompt_expr = self.parse_factor() 
+            prompt_expr = self.parse_factor()
             node = Prompt(prompt_expr)
             node.line = token.line
             return node
@@ -1846,9 +1846,9 @@ class Parser:
             op_val = op_token.value
             if op_token.type == 'MUL': op_val = '*'
             if op_token.type == 'TIMES': op_val = '*'
-            if op_token.type == 'DIV': 
+            if op_token.type == 'DIV':
                 op_val = '/'
-                if self.check('BY'): self.consume('BY') # Handle "divided by"
+                if self.check('BY'): self.consume('BY')
             if op_token.type == 'MOD': op_val = '%'
             right = self.parse_factor()
             new_node = BinOp(left, op_val, right)
@@ -1857,7 +1857,7 @@ class Parser:
         return left
     def parse_convert(self) -> Convert:
         token = self.consume('CONVERT')
-        expr = self.parse_factor() 
+        expr = self.parse_factor()
         self.consume('TO')
         target_format = 'json'
         if self.check('JSON'):
@@ -1942,7 +1942,7 @@ class Parser:
              token = self.consume('CLICK')
              self.consume('AT')
              x = self.parse_expression()
-             if self.check('COMMA'): self.consume('COMMA') 
+             if self.check('COMMA'): self.consume('COMMA')
              y = self.parse_expression()
              self.consume('NEWLINE')
              return AutomationOp('click', [x, y])
@@ -2058,9 +2058,9 @@ class Parser:
         expr = self.parse_expression()
         only_letters = Boolean(False)
         if self.check('ID') and self.peek().value == 'only':
-            self.consume() # consume 'only'
+            self.consume()
             if self.check('ID') and self.peek().value == 'letters':
-                self.consume() # consume 'letters'
+                self.consume()
             only_letters = Boolean(True)
         node = Call('upper', [expr, only_letters])
         node.line = token.line
@@ -2070,21 +2070,21 @@ class Parser:
         if self.check('ID') and self.peek().value == 'numbers':
              self.consume()
         else:
-             pass 
+             pass
         self.consume('FROM')
         start = self.parse_expression()
         self.consume('TO')
         end = self.parse_expression()
         condition = None
         if self.check('ID') and self.peek().value == 'that':
-            self.consume() # that
+            self.consume()
             if self.check('ID') and self.peek().value == 'are':
-                 self.consume() # are
+                 self.consume()
             if self.check('ID') and self.peek().value == 'prime':
-                self.consume() # prime
+                self.consume()
                 condition = String('prime')
             elif self.check('ID') and self.peek().value == 'digits':
-                self.consume() # digits
+                self.consume()
                 condition = String('digits')
         elif self.check('WHEN'):
              self.consume('WHEN')
@@ -2124,8 +2124,8 @@ class Parser:
         token = self.consume('WAIT')
         value = self.parse_expression()
         if self.check('SECOND'): self.consume('SECOND')
-        elif self.check('SECONDS'): self.consume('SECONDS') # Assuming 'SECONDS' token maps to SECOND?
-        elif self.check('MINUTE'): 
+        elif self.check('SECONDS'): self.consume('SECONDS')
+        elif self.check('MINUTE'):
             self.consume('MINUTE')
             value = BinOp(value, '*', Number(60))
         self.consume('NEWLINE')

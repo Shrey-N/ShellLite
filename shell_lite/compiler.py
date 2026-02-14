@@ -44,7 +44,7 @@ class Compiler:
             "",
             "# Initialize Runtime Helpers",
             "builtins_map = get_builtins()",
-            "globals().update(builtins_map)", 
+            "globals().update(builtins_map)",
             "",
             "class DotDict(dict):",
             "    def __getattr__(self, key):",
@@ -231,7 +231,7 @@ class Compiler:
         self.indentation -= 1
         return code
     def visit_Repeat(self, node: Repeat):
-        return self.visit_For(For(node.count, node.body)) 
+        return self.visit_For(For(node.count, node.body))
     def visit_Forever(self, node: Forever):
         code = f"while True:\n"
         self.indentation += 1
@@ -352,9 +352,9 @@ class Compiler:
              self.indentation = 1
              code += self.compile_block(node.body)
              self.indentation = old_indent
-             code += f"\n_slang_ret = {var_name}" 
+             code += f"\n_slang_ret = {var_name}"
              code += f"\n_web_builder.add_text({var_name})"
-             return code 
+             return code
         return call_expr
     def visit_ClassDef(self, node: ClassDef):
         parent = node.parent if node.parent else "Instance"
@@ -445,7 +445,7 @@ class Compiler:
         return f"raise Exception({self.visit(node.message)})"
     def visit_Stop(self, node: Stop): return "break"
     def visit_Skip(self, node: Skip): return "continue"
-    def visit_Exit(self, node: Exit): 
+    def visit_Exit(self, node: Exit):
         code = self.visit(node.code) if node.code else "0"
         return f"sys.exit({code})"
     def visit_ListComprehension(self, node: ListComprehension):
@@ -461,7 +461,7 @@ class Compiler:
         if isinstance(node.call, Call):
             args = [self.visit(a) for a in node.call.args]
             return f"_executor.submit({node.call.name}, {', '.join(args)})"
-        return f"_executor.submit({self.visit(node.call)})" 
+        return f"_executor.submit({self.visit(node.call)})"
     def visit_Await(self, node: Await):
         return f"{self.visit(node.task)}.result()"
     def visit_Listen(self, node: Listen):

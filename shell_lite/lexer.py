@@ -16,7 +16,6 @@ class Lexer:
         self.line_number = 1
         self.indent_stack = [0]
         self.bracket_depth = 0
-
     def tokenize(self) -> List[Token]:
         source = self._remove_multiline_comments(self.source_code)
         lines = source.split('\n')
@@ -46,10 +45,8 @@ class Lexer:
             self.indent_stack.pop()
             self.tokens.append(Token('DEDENT', '', self.line_number, 1))
         self.tokens.append(Token('EOF', '', self.line_number, 1))
-        # Post-process: Convert BEGIN/END to INDENT/DEDENT
         self.tokens = self._convert_begin_end(self.tokens)
         return self.tokens
-    
     def _convert_begin_end(self, tokens: List[Token]) -> List[Token]:
         """Convert BEGIN/END keywords to INDENT/DEDENT for uniform parsing."""
         result = []
@@ -57,17 +54,13 @@ class Lexer:
         while i < len(tokens):
             token = tokens[i]
             if token.type == 'BEGIN':
-                # Remove preceding NEWLINE if present (since begin is on its own line)
                 if result and result[-1].type == 'NEWLINE':
                     result.pop()
-                # Just add INDENT (the newline was already there from previous line)
                 result.append(Token('INDENT', '', token.line, token.column))
             elif token.type == 'END':
-                # Add DEDENT
                 result.append(Token('DEDENT', '', token.line, token.column))
-                # Skip the NEWLINE after end if present
                 if i + 1 < len(tokens) and tokens[i + 1].type == 'NEWLINE':
-                    i += 1  # Skip the next NEWLINE
+                    i += 1
             else:
                 result.append(token)
             i += 1
@@ -180,8 +173,6 @@ class Lexer:
             }
             if char in single_char_tokens:
                 self.tokens.append(Token(single_char_tokens[char], char, self.line_number, current_col))
-                
-                # Track bracket depth here too
                 if char in '([{':
                     self.bracket_depth += 1
                 elif char in ')]}':

@@ -65,7 +65,7 @@ def run_repl():
     try:
         from prompt_toolkit import PromptSession
         from prompt_toolkit.lexers import PygmentsLexer
-        from pygments.lexers.shell import BashLexer 
+        from pygments.lexers.shell import BashLexer
         from prompt_toolkit.styles import Style
         style = Style.from_dict({
             'prompt': '#ansigreen bold',
@@ -216,7 +216,7 @@ def install_package(package_name: str, branch: str = "main"):
         os.makedirs(modules_dir)
     target_dir = os.path.join(modules_dir, repo)
     if os.path.exists(target_dir):
-        pass 
+        pass
     zip_url = f"https://github.com/{user}/{repo}/archive/refs/heads/{branch}.zip"
     try:
         import tempfile
@@ -238,7 +238,7 @@ def install_package(package_name: str, branch: str = "main"):
             root_name = z.namelist()[0].split('/')[0]
         extracted_path = os.path.join(modules_dir, root_name)
         if os.path.exists(target_dir):
-             shutil.rmtree(target_dir) # Remove old version
+             shutil.rmtree(target_dir)
         os.rename(extracted_path, target_dir)
         print(f"[SUCCESS] Installed '{package_name}' to {target_dir}")
     except Exception as e:
@@ -266,7 +266,7 @@ def compile_file(filename: str, target: str = 'llvm'):
             try:
                 from .llvm_backend.builder import build_llvm
                 build_llvm(filename)
-                return # build_llvm handles writing file
+                return
             except ImportError:
                 print("Error: 'llvmlite' is required for LLVM compilation.")
                 return
@@ -292,7 +292,7 @@ def compile_file(filename: str, target: str = 'llvm'):
                 ])
                 print(f"[SUCCESS] Built {os.path.splitext(os.path.basename(filename))[0]}.exe")
             except ImportError:
-                 pass 
+                 pass
     except Exception as e:
         print(f"Compilation Failed: {e}")
 def lint_file(filename: str):
@@ -310,7 +310,7 @@ def lint_file(filename: str):
     except Exception as e:
         line = getattr(e, 'line', 1)
         print(json.dumps([{
-            "line": line, 
+            "line": line,
             "message": str(e)
         }]))
 def resolve_cursor(filename: str, line: int, col: int):
@@ -349,7 +349,7 @@ def resolve_cursor(filename: str, line: int, col: int):
         while queue:
             n = queue.pop(0)
             if isinstance(n, FunctionDef):
-                if n.name == word: 
+                if n.name == word:
                     found_node = n
                     found_type = "Function"
                     break
@@ -419,7 +419,7 @@ def main():
         if cmd == "compile" or cmd == "build":
             if len(sys.argv) > 2:
                 filename = sys.argv[2]
-                target = 'llvm' # Default to LLVM
+                target = 'llvm'
                 if '--target' in sys.argv:
                     try:
                         idx = sys.argv.index('--target')
@@ -463,7 +463,7 @@ def main():
                 install_package(package_name)
             else:
                 install_all_dependencies()
-        elif cmd == "setup-path": # Renamed from 'install' to avoid confusion, but kept 'install' as verify
+        elif cmd == "setup-path":
              install_globally()
         elif cmd == "fmt" or cmd == "format":
             if len(sys.argv) > 2:
